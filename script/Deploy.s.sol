@@ -2,7 +2,7 @@
 pragma solidity ^0.8.34;
 
 import {Script, console} from "forge-std/Script.sol";
-import {OseroPAUDeployment} from "./OseroPAUDeployment.sol";
+import {OseroPAUDeployment} from "../src/OseroPAUDeployment.sol";
 
 /// @title Osero PAU Deployment Script
 /// @notice Broadcasts the canonical Osero PAU deployment and logs the deployed addresses.

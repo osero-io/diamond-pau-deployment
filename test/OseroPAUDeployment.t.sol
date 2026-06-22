@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultPAUAssembler.sol";
 
-import {OseroPAUDeployment} from "../script/OseroPAUDeployment.sol";
+import {OseroPAUDeployment} from "../src/OseroPAUDeployment.sol";
 
 interface IAdministeredAgentLike {
     error NotActor();
