@@ -10,5 +10,8 @@
       "name": "v1.0.0",
       "rev": "d7d6f084604d4f7e45879a3b15d03ee870231467"
     }
+  },
+  "lib/sky-pau-registry": {
+    "rev": "7b4493a7800b355ef5c9cc43e569c5e8d6fd97f8"
   }
 }

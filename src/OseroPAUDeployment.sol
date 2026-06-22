@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultPAUAssembler.sol";
 import {Ethereum} from "sky-pau-registry/Ethereum.sol";
+import {Ethereum as OseroEthereumRegistry} from "@osero/address-registry/Ethereum.sol";
 
 /// @title Osero PAU Deployment Library
 /// @notice Builds and executes the canonical Osero PAU deployment configuration.
@@ -11,12 +12,6 @@ import {Ethereum} from "sky-pau-registry/Ethereum.sol";
 library OseroPAUDeployment {
     /// @notice Mainnet DefaultPAUAssembler used to deploy and wire the PAU contracts.
     DefaultPAUAssembler internal constant DEFAULT_PAU_ASSEMBLER = DefaultPAUAssembler(Ethereum.DEFAULT_PAU_ASSEMBLER);
-
-    /// @notice Osero subproxy that receives default-admin roles on the deployed PAU components.
-    address internal constant OSERO_SUB_PROXY = 0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3;
-
-    /// @notice Osero operator multisig authorized as an allocator-agent actor.
-    address internal constant OSERO_OPERATOR = 0x29c5A20A49A0D522A3714af97C517a908946b6A8;
 
     /// @notice Soter Labs relayer multisig authorized as an allocator-agent actor.
     address internal constant SOTER_RELAYER = 0x3dE688267Cf099307aBdd85F64D8efe03D0b2b26;
@@ -53,13 +48,13 @@ library OseroPAUDeployment {
     /// @notice Returns the Osero subproxy address.
     /// @return The address configured as component admin and allocator-agent admin.
     function oseroSubProxy() internal pure returns (address) {
-        return OSERO_SUB_PROXY;
+        return OseroEthereumRegistry.OSERO_PROXY;
     }
 
     /// @notice Returns the Osero operator multisig address.
     /// @return The address configured as an allocator-agent actor.
     function oseroOperator() internal pure returns (address) {
-        return OSERO_OPERATOR;
+        return OseroEthereumRegistry.OSERO_OPERATOR;
     }
 
     /// @notice Returns the Soter Labs relayer multisig address.
@@ -102,7 +97,7 @@ library OseroPAUDeployment {
     {
         address[] memory allocatorActors = new address[](2);
         allocatorActors[0] = SOTER_RELAYER;
-        allocatorActors[1] = OSERO_OPERATOR;
+        allocatorActors[1] = OseroEthereumRegistry.OSERO_OPERATOR;
 
         address[] memory allocatorRevokers = new address[](1);
         allocatorRevokers[0] = SOTER_FREEZER;
@@ -129,6 +124,6 @@ library OseroPAUDeployment {
     /// @return componentAdmins A one-element array containing the Osero subproxy.
     function _componentAdmins() private pure returns (address[] memory componentAdmins) {
         componentAdmins = new address[](1);
-        componentAdmins[0] = OSERO_SUB_PROXY;
+        componentAdmins[0] = OseroEthereumRegistry.OSERO_PROXY;
     }
 }
