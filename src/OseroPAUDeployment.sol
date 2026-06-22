@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultPAUAssembler.sol";
+import {Ethereum} from "sky-pau-registry/Ethereum.sol";
 
 /// @title Osero PAU Deployment Library
 /// @notice Builds and executes the canonical Osero PAU deployment configuration.
@@ -9,8 +10,7 @@ import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultP
 ///      same assembler address, admins, allocator-agent permissions, and integration IDs.
 library OseroPAUDeployment {
     /// @notice Mainnet DefaultPAUAssembler used to deploy and wire the PAU contracts.
-    DefaultPAUAssembler internal constant DEFAULT_PAU_ASSEMBLER =
-        DefaultPAUAssembler(0xc812aAD3FaE2D3511C664374B601a9BeBFeCCa2E);
+    DefaultPAUAssembler internal constant DEFAULT_PAU_ASSEMBLER = DefaultPAUAssembler(Ethereum.DEFAULT_PAU_ASSEMBLER);
 
     /// @notice Osero subproxy that receives default-admin roles on the deployed PAU components.
     address internal constant OSERO_SUB_PROXY = 0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3;
