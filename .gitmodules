@@ -4,3 +4,6 @@
 [submodule "lib/pau-assemblers"]
 	path = lib/pau-assemblers
 	url = https://github.com/sky-ecosystem/pau-assemblers
+[submodule "lib/sky-pau-registry"]
+	path = lib/sky-pau-registry
+	url = https://github.com/sky-ecosystem/sky-pau-registry
