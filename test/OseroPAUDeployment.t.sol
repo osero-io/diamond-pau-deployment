@@ -96,7 +96,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal pauFactory;
 
     function setUp() external {
-        _selectFork();
+        vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
 
         assembler = OseroPAUDeployment.defaultPAUAssembler();
         pauFactory = assembler.pauFactory();
@@ -157,8 +157,6 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function test_deploymentEventMatchesLibraryConfiguration() external {
-        _selectFork();
-
         assembler = OseroPAUDeployment.defaultPAUAssembler();
         pauFactory = assembler.pauFactory();
 
@@ -303,10 +301,6 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(integrations[1].config.facet, PSM_FACET);
         assertEq(integrations[1].config.wires.length, 11);
         _assertWiresConfigured(integrations[1].config.wires);
-    }
-
-    function _selectFork() internal {
-        vm.createSelectFork(vm.envString("MAINNET_RPC_URL"), MAINNET_FORK_BLOCK);
     }
 
     function _assertWiresConfigured(IControllerLike.Wire[] memory wires) internal pure {
