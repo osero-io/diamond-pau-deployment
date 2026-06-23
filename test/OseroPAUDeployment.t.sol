@@ -7,6 +7,7 @@ import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultP
 
 import {OseroPAUDeployment} from "../src/OseroPAUDeployment.sol";
 
+import {Ethereum as SkyEthereum} from "sky-pau-registry/Ethereum.sol";
 import {Ethereum} from "@osero/address-registry/Ethereum.sol";
 
 interface IAdministeredAgentLike {
@@ -127,8 +128,8 @@ contract CallTarget {
 contract OseroPAUDeployment_Fork_Tests is Test {
     uint256 internal constant MAINNET_FORK_BLOCK = 25_374_589;
 
-    address internal constant AAVE_FACET = 0x8CE890A96a193ff2DD4B2eA3C682326F655f6b62;
-    address internal constant USDS_FACET = 0x1221CC4B85Ab260660aD21C2829e0EB516dffBc7;
+    address internal constant AAVE_FACET = SkyEthereum.AAVE_FACET;
+    address internal constant USDS_FACET = SkyEthereum.USDS_FACET;
 
     address internal constant SPARK_USDS_SPTOKEN = 0xC02aB1A5eaA8d1B114EF786D9bde108cD4364359;
     address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
