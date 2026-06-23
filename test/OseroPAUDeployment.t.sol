@@ -172,11 +172,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal oseroAllocatorVault;
 
     function setUp() external {
+        // Pin the fork so deterministic addresses and live protocol state stay stable.
         vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
 
         assembler = OseroPAUDeployment.defaultPAUAssembler();
         pauFactory = assembler.pauFactory();
 
+        // Pre-compute CREATE addresses before deploy() consumes the factory nonces.
         address administeredAgentFactory = assembler.administeredAgentFactory();
 
         expectedAllocatorAgent =
@@ -186,16 +188,19 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         expectedRateLimits = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 2);
         expectedController = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 3);
 
+        // Deploy the PAU stack, then build the local allocator used by end-to-end tests.
         deployment = OseroPAUDeployment.deploy();
         _deployOseroAllocator();
     }
 
     function test_configurationLibraryBuildsExpectedInputs() external pure {
+        // Integration IDs define the controller facet order.
         bytes32[] memory integrationIds = OseroPAUDeployment.integrationIds();
         assertEq(integrationIds.length, 2);
         assertEq(integrationIds[0], AAVE_FACET_INTEGRATION_ID);
         assertEq(integrationIds[1], USDS_FACET_INTEGRATION_ID);
 
+        // Component admins should all resolve to the Osero subproxy.
         IDefaultPAUAssembler.AdminConfig memory adminConfig = OseroPAUDeployment.adminConfig();
         assertEq(adminConfig.accessControlAdmins.length, 1);
         assertEq(adminConfig.proxyAdmins.length, 1);
@@ -204,6 +209,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(adminConfig.proxyAdmins[0], OseroPAUDeployment.oseroSubProxy());
         assertEq(adminConfig.rateLimitsAdmins[0], OseroPAUDeployment.oseroSubProxy());
 
+        // The allocator agent config should expose only the intended operators and freezer.
         IDefaultPAUAssembler.AdministeredAgentConfig[] memory allocatorAgentConfigs =
             OseroPAUDeployment.allocatorAgentConfigs();
         assertEq(allocatorAgentConfigs.length, 1);
@@ -218,6 +224,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function test_deploysExpectedAddressesAndCode() external view {
+        // The deployment should consume the exact factory nonces predicted in setUp().
         assertEq(deployment.accessControls, expectedAccessControls);
         assertEq(deployment.proxy, expectedProxy);
         assertEq(deployment.rateLimits, expectedRateLimits);
@@ -226,6 +233,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(deployment.allocatorAgents.length, 1);
         assertEq(deployment.allocatorAgents[0], expectedAllocatorAgent);
 
+        // Address checks are not enough; each deployed component must contain bytecode.
         assertGt(deployment.accessControls.code.length, 0);
         assertGt(deployment.proxy.code.length, 0);
         assertGt(deployment.rateLimits.code.length, 0);
@@ -237,6 +245,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assembler = OseroPAUDeployment.defaultPAUAssembler();
         pauFactory = assembler.pauFactory();
 
+        // Recompute expected addresses against the current factory nonces for this deploy.
         address administeredAgentFactory = assembler.administeredAgentFactory();
         address[] memory expectedAllocatorAgents = new address[](1);
         expectedAllocatorAgents[0] =
@@ -247,6 +256,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         address rateLimits = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 2);
         address controller = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 3);
 
+        // The emitted deployment payload should mirror the library-generated config.
         bytes32[] memory integrationIds = OseroPAUDeployment.integrationIds();
         IDefaultPAUAssembler.AdminConfig memory adminConfig = OseroPAUDeployment.adminConfig();
         IDefaultPAUAssembler.AdministeredAgentConfig[] memory allocatorAgentConfigs =
@@ -273,6 +283,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         address soterFreezer = OseroPAUDeployment.soterFreezer();
         address soterRelayer = OseroPAUDeployment.soterRelayer();
 
+        // AccessControls owns PAU-wide roles; only the allocator agent gets ALLOCATOR_ROLE.
         IAccessControlLike accessControls = IAccessControlLike(deployment.accessControls);
         assertEq(accessControls.getRoleMemberCount(DEFAULT_ADMIN_ROLE), 1);
         assertEq(accessControls.getRoleMemberCount(ALLOCATOR_ROLE), 1);
@@ -284,6 +295,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertFalse(accessControls.hasRole(ALLOCATOR_ROLE, soterRelayer));
         assertFalse(accessControls.hasRole(ALLOCATOR_ROLE, soterFreezer));
 
+        // The proxy accepts controller calls but does not grant admin rights to operators.
         IAccessControlLike proxy = IAccessControlLike(deployment.proxy);
         assertTrue(proxy.hasRole(DEFAULT_ADMIN_ROLE, oseroSubProxy));
         assertTrue(proxy.hasRole(IALMProxyLike(deployment.proxy).CONTROLLER(), deployment.controller));
@@ -292,6 +304,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertFalse(proxy.hasRole(DEFAULT_ADMIN_ROLE, soterRelayer));
         assertFalse(proxy.hasRole(DEFAULT_ADMIN_ROLE, soterFreezer));
 
+        // RateLimits follows the same admin boundary and controller-only mutation path.
         IAccessControlLike rateLimits = IAccessControlLike(deployment.rateLimits);
         assertTrue(rateLimits.hasRole(DEFAULT_ADMIN_ROLE, oseroSubProxy));
         assertTrue(rateLimits.hasRole(IRateLimitsLike(deployment.rateLimits).CONTROLLER(), deployment.controller));
@@ -310,16 +323,19 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         address soterFreezer = OseroPAUDeployment.soterFreezer();
         address soterRelayer = OseroPAUDeployment.soterRelayer();
 
+        // Agent membership counts lock down the intended role surface.
         assertEq(allocatorAgent.adminCount(), 1);
         assertEq(allocatorAgent.actorCount(), 2);
         assertEq(allocatorAgent.grantorCount(), 0);
         assertEq(allocatorAgent.revokerCount(), 1);
 
+        // Positive membership checks cover each configured agent role.
         assertTrue(allocatorAgent.getIsAdmin(oseroSubProxy));
         assertTrue(allocatorAgent.getIsActor(soterRelayer));
         assertTrue(allocatorAgent.getIsActor(oseroOperator));
         assertTrue(allocatorAgent.getIsRevoker(soterFreezer));
 
+        // Negative checks prevent admins, actors, grantors, and revokers from overlapping.
         assertFalse(allocatorAgent.getIsAdmin(address(assembler)));
         assertFalse(allocatorAgent.getIsAdmin(soterRelayer));
         assertFalse(allocatorAgent.getIsAdmin(oseroOperator));
@@ -339,18 +355,21 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         IAdministeredAgentLike allocatorAgent = IAdministeredAgentLike(deployment.allocatorAgents[0]);
         CallTarget target = new CallTarget();
 
+        // Soter relayer can execute through the agent, and the target sees the agent as msg.sender.
         vm.prank(OseroPAUDeployment.soterRelayer());
         bytes memory relayerResult = allocatorAgent.call(address(target), abi.encodeCall(CallTarget.record, ()));
         assertEq(abi.decode(relayerResult, (address)), deployment.allocatorAgents[0]);
         assertEq(target.lastSender(), deployment.allocatorAgents[0]);
         assertEq(target.callCount(), 1);
 
+        // Osero operator has the same actor path and increments the target call count.
         vm.prank(OseroPAUDeployment.oseroOperator());
         bytes memory operatorResult = allocatorAgent.call(address(target), abi.encodeCall(CallTarget.record, ()));
         assertEq(abi.decode(operatorResult, (address)), deployment.allocatorAgents[0]);
         assertEq(target.lastSender(), deployment.allocatorAgents[0]);
         assertEq(target.callCount(), 2);
 
+        // A random non-actor must fail before the target call executes.
         vm.prank(makeAddr("non-actor"));
         vm.expectRevert(IAdministeredAgentLike.NotActor.selector);
         bytes memory nonActorResult = allocatorAgent.call(address(target), abi.encodeCall(CallTarget.record, ()));
@@ -360,11 +379,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     function test_controllerWiringAndIntegrations() external view {
         IControllerLike controller = IControllerLike(deployment.controller);
 
+        // Core controller pointers should match the deployed PAU components.
         assertEq(controller.accessControls(), deployment.accessControls);
         assertEq(controller.proxy(), deployment.proxy);
         assertEq(controller.rateLimits(), deployment.rateLimits);
         assertEq(controller.beacon(), IPAUFactoryLike(pauFactory).beacon());
 
+        // Controller integrations should preserve the library order and expected facet wiring.
         bytes32[] memory expectedIntegrationIds = OseroPAUDeployment.integrationIds();
         IControllerLike.Integration[] memory integrations = controller.integrations();
         assertEq(integrations.length, expectedIntegrationIds.length);
@@ -386,8 +407,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         IControllerFacetLike controller = IControllerFacetLike(deployment.controller);
         IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
 
+        // Give the PAU proxy permission to use the local allocator vault and buffer.
         _authorizeProxyOnOseroAllocator();
 
+        // Configure the USDS facet to mint from and burn back into the Osero allocator vault.
         vm.prank(OseroPAUDeployment.oseroSubProxy());
         controller.usds_setVault(oseroAllocatorVault);
         assertEq(controller.usds_vault(), oseroAllocatorVault);
@@ -395,6 +418,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         bytes32 mintKey = controller.usds_mintRateLimitKey();
         bytes32 burnKey = controller.usds_burnRateLimitKey();
 
+        // Seed one-shot mint and burn limits so each operation must consume its own key.
         vm.startPrank(OseroPAUDeployment.oseroSubProxy());
         rateLimits.setRateLimitData(mintKey, usdsAmount, 0);
         rateLimits.setRateLimitData(burnKey, usdsAmount, 0);
@@ -404,11 +428,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(rateLimits.getCurrentRateLimit(burnKey), usdsAmount);
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
 
+        // Mint through the allocator agent; the proxy receives USDS and spends the mint limit.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
 
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
         assertEq(rateLimits.getCurrentRateLimit(mintKey), 0);
 
+        // Burn through the same path; USDS returns to zero and the burn limit is consumed.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
 
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
@@ -418,17 +444,21 @@ contract OseroPAUDeployment_Fork_Tests is Test {
 
     function test_endToEnd_usdsFacetFundsSparkLendAaveFacet() external {
         uint256 usdsAmount = 100e18;
+        // Configure USDS, Aave, and rate-limit state shared by the Spark Lend flow.
         (bytes32 depositKey, bytes32 withdrawKey) = _configureSparkLendFacetTest(usdsAmount);
 
+        // Start with freshly minted USDS held by the PAU proxy.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
         assertEq(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), 0);
 
+        // Deposit USDS into Spark Lend; the proxy should receive spTokens and spend deposit capacity.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.aave_deposit, (SPARK_USDS_SPTOKEN, usdsAmount)));
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
         assertGe(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), usdsAmount);
         assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), 0);
 
+        // Withdraw back to USDS and verify the facet returns the withdrawn amount.
         bytes memory withdrawResult =
             _operateDiamond(abi.encodeCall(IControllerFacetLike.aave_withdraw, (SPARK_USDS_SPTOKEN, usdsAmount)));
 
@@ -438,11 +468,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(withdrawKey), 0);
         assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), usdsAmount);
 
+        // Burn the withdrawn USDS so the end-to-end flow exits with no proxy balance.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
     }
 
     function test_endToEnd_operatorCannotBypassAllocatorAgent() external {
+        // Operators must route through the allocator agent; direct controller calls lack ALLOCATOR_ROLE.
         vm.prank(OseroPAUDeployment.oseroOperator());
         vm.expectRevert(
             abi.encodeWithSignature(
@@ -453,6 +485,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function _operateDiamond(bytes memory data) internal returns (bytes memory result) {
+        // All mutating controller calls in these tests execute via the configured operator path.
         vm.prank(OseroPAUDeployment.oseroOperator());
         result = IAdministeredAgentLike(deployment.allocatorAgents[0]).call(deployment.controller, data);
     }
@@ -465,10 +498,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
         address sparkPool = IATokenLike(SPARK_USDS_SPTOKEN).POOL();
 
+        // Sanity-check that the Spark market under test is the USDS market.
         assertEq(IATokenLike(SPARK_USDS_SPTOKEN).UNDERLYING_ASSET_ADDRESS(), USDS);
 
+        // Wire allocator permissions before facets attempt to move USDS through the proxy.
         _authorizeProxyOnOseroAllocator();
 
+        // Configure facet state and per-operation rate limits as the Osero subproxy admin.
         vm.startPrank(OseroPAUDeployment.oseroSubProxy());
         controller.usds_setVault(oseroAllocatorVault);
         controller.aave_setMaxSlippage(SPARK_USDS_SPTOKEN, 1e18);
@@ -482,12 +518,14 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         rateLimits.setRateLimitData(withdrawKey, usdsAmount, 0);
         vm.stopPrank();
 
+        // Confirm setup took effect before the caller exercises deposit or withdrawal paths.
         assertEq(controller.aave_getMaxSlippage(SPARK_USDS_SPTOKEN), 1e18);
         assertEq(rateLimits.getCurrentRateLimit(depositKey), usdsAmount);
         assertEq(rateLimits.getCurrentRateLimit(withdrawKey), usdsAmount);
     }
 
     function _deployOseroAllocator() internal {
+        // Build a minimal Maker allocator instance on the fork for PAU integration tests.
         DssInstance memory dss = MCD.loadFromChainlog(DSS_CHAINLOG);
         address usdsJoin = IChainlogLike(DSS_CHAINLOG).getAddress("USDS_JOIN");
 
@@ -496,6 +534,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         sharedInstance.roles = address(new AllocatorRoles());
         sharedInstance.registry = address(new AllocatorRegistry());
 
+        // Hand ownership to the pause proxy so AllocatorInit can initialize shared contracts.
         _switchOwner(sharedInstance.roles, MCD_PAUSE_PROXY);
         _switchOwner(sharedInstance.registry, MCD_PAUSE_PROXY);
 
@@ -505,6 +544,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
             address(new AllocatorVault(sharedInstance.roles, ilkInstance.buffer, OSERO_ALLOCATOR_ILK, usdsJoin));
         ilkInstance.owner = MCD_PAUSE_PROXY;
 
+        // The ilk-level buffer and vault are also initialized under pause-proxy authority.
         _switchOwner(ilkInstance.buffer, MCD_PAUSE_PROXY);
         _switchOwner(ilkInstance.vault, MCD_PAUSE_PROXY);
 
@@ -518,6 +558,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
             ilkRegistry: IChainlogLike(DSS_CHAINLOG).getAddress("ILK_REGISTRY")
         });
 
+        // Initialize the allocator ilk as Maker governance would on mainnet.
         vm.startPrank(MCD_PAUSE_PROXY);
         AllocatorInit.initShared(dss, sharedInstance);
         AllocatorInit.initIlk(dss, sharedInstance, ilkInstance, ilkConfig);
@@ -533,17 +574,20 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function _authorizeProxyOnOseroAllocator() internal {
+        // Osero subproxy grants PAU vault authority and buffer allowance for USDS movements.
         vm.startPrank(OseroPAUDeployment.oseroSubProxy());
         IAllocatorVaultLike(oseroAllocatorVault).rely(deployment.proxy);
         IAllocatorBufferLike(oseroAllocatorBuffer).approve(USDS, deployment.proxy, type(uint256).max);
         vm.stopPrank();
 
+        // Assert both auth and token allowances before an end-to-end test depends on them.
         assertEq(IAllocatorVaultLike(oseroAllocatorVault).wards(deployment.proxy), 1);
         assertEq(IERC20Like(USDS).allowance(oseroAllocatorBuffer, deployment.proxy), type(uint256).max);
         assertEq(IERC20Like(USDS).allowance(oseroAllocatorBuffer, oseroAllocatorVault), type(uint256).max);
     }
 
     function _assertWiresConfigured(IControllerLike.Wire[] memory wires) internal pure {
+        // Every configured wire must map a public selector to a delegate selector.
         for (uint256 i; i < wires.length; ++i) {
             assertTrue(wires[i].callSelector != bytes4(0));
             assertTrue(wires[i].delegateSelector != bytes4(0));
