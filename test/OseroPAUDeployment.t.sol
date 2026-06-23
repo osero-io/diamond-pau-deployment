@@ -7,6 +7,8 @@ import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultP
 
 import {OseroPAUDeployment} from "../src/OseroPAUDeployment.sol";
 
+import {Ethereum} from "@osero/address-registry/Ethereum.sol";
+
 interface IAdministeredAgentLike {
     error NotActor();
 
@@ -128,12 +130,9 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal constant AAVE_FACET = 0x8CE890A96a193ff2DD4B2eA3C682326F655f6b62;
     address internal constant USDS_FACET = 0x1221CC4B85Ab260660aD21C2829e0EB516dffBc7;
 
-    address internal constant ALLOCATOR_VAULT = 0x146181Aa9B362EaEC2eC3aDd7429a06D53B43d1a;
-    address internal constant ALLOCATOR_BUFFER = 0xD0BB61b34771146e31055f20f329cDf97429F889;
     address internal constant SPARK_USDS_SPTOKEN = 0xC02aB1A5eaA8d1B114EF786D9bde108cD4364359;
     address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
 
-    bytes32 internal constant OSERO_ALLOCATOR_ILK = "ALLOCATOR-PRYSM-A";
 
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -172,12 +171,12 @@ contract OseroPAUDeployment_Fork_Tests is Test {
 
         // Deploy the PAU stack, then point end-to-end tests at the existing Osero allocator stack.
         deployment = OseroPAUDeployment.deploy();
-        oseroAllocatorBuffer = ALLOCATOR_BUFFER;
-        oseroAllocatorVault = ALLOCATOR_VAULT;
+        oseroAllocatorBuffer = Ethereum.OSERO_ALLOCATOR_BUFFER;
+        oseroAllocatorVault = Ethereum.OSERO_ALLOCATOR_VAULT;
 
         assertGt(oseroAllocatorVault.code.length, 0);
         assertGt(oseroAllocatorBuffer.code.length, 0);
-        assertEq(IAllocatorVaultLike(oseroAllocatorVault).ilk(), OSERO_ALLOCATOR_ILK);
+        assertEq(IAllocatorVaultLike(oseroAllocatorVault).ilk(), Ethereum.OSERO_ILK);
         assertEq(IAllocatorVaultLike(oseroAllocatorVault).buffer(), oseroAllocatorBuffer);
     }
 
