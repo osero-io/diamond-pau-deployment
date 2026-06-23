@@ -2,6 +2,14 @@
 pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
+import {AllocatorIlkConfig, AllocatorInit} from "dss-allocator/deploy/AllocatorInit.sol";
+import {AllocatorIlkInstance, AllocatorSharedInstance} from "dss-allocator/deploy/AllocatorInstances.sol";
+import {AllocatorBuffer} from "dss-allocator/src/AllocatorBuffer.sol";
+import {AllocatorOracle} from "dss-allocator/src/AllocatorOracle.sol";
+import {AllocatorRegistry} from "dss-allocator/src/AllocatorRegistry.sol";
+import {AllocatorRoles} from "dss-allocator/src/AllocatorRoles.sol";
+import {AllocatorVault} from "dss-allocator/src/AllocatorVault.sol";
+import {DssInstance, MCD} from "dss-test/MCD.sol";
 
 import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultPAUAssembler.sol";
 
@@ -59,7 +67,63 @@ interface IPAUFactoryLike {
 }
 
 interface IRateLimitsLike {
+    struct RateLimitData {
+        uint256 maxAmount;
+        uint256 slope;
+        uint256 lastAmount;
+        uint256 lastUpdated;
+    }
+
     function CONTROLLER() external view returns (bytes32);
+    function getCurrentRateLimit(bytes32 key) external view returns (uint256);
+    function getRateLimitData(bytes32 key) external view returns (RateLimitData memory);
+    function setRateLimitData(bytes32 key, uint256 maxAmount, uint256 slope) external;
+}
+
+interface IControllerFacetLike {
+    function aave_deposit(address aToken, uint256 amount) external;
+    function aave_getDepositRateLimitKey(address aToken, address pool, address underlyingAsset)
+        external
+        pure
+        returns (bytes32);
+    function aave_getMaxSlippage(address aToken) external view returns (uint256);
+    function aave_getWithdrawRateLimitKey(address aToken, address pool) external pure returns (bytes32);
+    function aave_setMaxSlippage(address aToken, uint256 maxSlippage) external;
+    function aave_withdraw(address aToken, uint256 amount) external returns (uint256 amountWithdrawn);
+    function usds_burn(uint256 usdsAmount) external;
+    function usds_burnRateLimitKey() external pure returns (bytes32);
+    function usds_mint(uint256 usdsAmount) external;
+    function usds_mintRateLimitKey() external pure returns (bytes32);
+    function usds_setVault(address vault) external;
+    function usds_vault() external view returns (address);
+}
+
+interface IChainlogLike {
+    function getAddress(bytes32 key) external view returns (address);
+}
+
+interface IAuthLike {
+    function deny(address usr) external;
+    function rely(address usr) external;
+}
+
+interface IAllocatorBufferLike {
+    function approve(address asset, address spender, uint256 amount) external;
+}
+
+interface IAllocatorVaultLike {
+    function rely(address usr) external;
+    function wards(address usr) external view returns (uint256);
+}
+
+interface IATokenLike {
+    function POOL() external view returns (address);
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+}
+
+interface IERC20Like {
+    function allowance(address owner, address spender) external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
 }
 
 contract CallTarget {
@@ -79,6 +143,16 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal constant AAVE_FACET = 0x8CE890A96a193ff2DD4B2eA3C682326F655f6b62;
     address internal constant USDS_FACET = 0x1221CC4B85Ab260660aD21C2829e0EB516dffBc7;
 
+    address internal constant DSS_CHAINLOG = 0xdA0Ab1e0017DEbCd72Be8599041a2aa3bA7e740F;
+    address internal constant MCD_PAUSE_PROXY = 0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB;
+    address internal constant SPARK_USDS_SPTOKEN = 0xC02aB1A5eaA8d1B114EF786D9bde108cD4364359;
+    address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
+
+    bytes32 internal constant OSERO_ALLOCATOR_ILK = "OSERO-A";
+
+    uint256 internal constant RAD = 10 ** 45;
+    uint256 internal constant EIGHT_PCT_APY = 1.00000000244041860825840003e27;
+
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -94,6 +168,8 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal expectedProxy;
     address internal expectedRateLimits;
     address internal pauFactory;
+    address internal oseroAllocatorBuffer;
+    address internal oseroAllocatorVault;
 
     function setUp() external {
         vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
@@ -111,6 +187,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         expectedController = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 3);
 
         deployment = OseroPAUDeployment.deploy();
+        _deployOseroAllocator();
     }
 
     function test_configurationLibraryBuildsExpectedInputs() external pure {
@@ -301,6 +378,169 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(integrations[1].config.facet, USDS_FACET);
         assertEq(integrations[1].config.wires.length, 8);
         _assertWiresConfigured(integrations[1].config.wires);
+    }
+
+    function test_endToEnd_usdsFacetMintsThenBurnsThroughSkyAllocatorVault() external {
+        uint256 usdsAmount = 100e18;
+
+        IControllerFacetLike controller = IControllerFacetLike(deployment.controller);
+        IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
+
+        _authorizeProxyOnOseroAllocator();
+
+        vm.prank(OseroPAUDeployment.oseroSubProxy());
+        controller.usds_setVault(oseroAllocatorVault);
+        assertEq(controller.usds_vault(), oseroAllocatorVault);
+
+        bytes32 mintKey = controller.usds_mintRateLimitKey();
+        bytes32 burnKey = controller.usds_burnRateLimitKey();
+
+        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
+        rateLimits.setRateLimitData(mintKey, usdsAmount, 0);
+        rateLimits.setRateLimitData(burnKey, usdsAmount, 0);
+        vm.stopPrank();
+
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), usdsAmount);
+        assertEq(rateLimits.getCurrentRateLimit(burnKey), usdsAmount);
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
+
+        _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
+
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), 0);
+
+        _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
+
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
+        assertEq(rateLimits.getCurrentRateLimit(burnKey), 0);
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), usdsAmount);
+    }
+
+    function test_endToEnd_usdsFacetFundsSparkLendAaveFacet() external {
+        uint256 usdsAmount = 100e18;
+        (bytes32 depositKey, bytes32 withdrawKey) = _configureSparkLendFacetTest(usdsAmount);
+
+        _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
+        assertEq(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), 0);
+
+        _operateDiamond(abi.encodeCall(IControllerFacetLike.aave_deposit, (SPARK_USDS_SPTOKEN, usdsAmount)));
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
+        assertGe(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), usdsAmount);
+        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), 0);
+
+        bytes memory withdrawResult =
+            _operateDiamond(abi.encodeCall(IControllerFacetLike.aave_withdraw, (SPARK_USDS_SPTOKEN, usdsAmount)));
+
+        assertEq(abi.decode(withdrawResult, (uint256)), usdsAmount);
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
+        assertEq(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), 0);
+        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(withdrawKey), 0);
+        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), usdsAmount);
+
+        _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
+        assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
+    }
+
+    function test_endToEnd_operatorCannotBypassAllocatorAgent() external {
+        vm.prank(OseroPAUDeployment.oseroOperator());
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "AccessControlUnauthorizedAccount(address,bytes32)", OseroPAUDeployment.oseroOperator(), ALLOCATOR_ROLE
+            )
+        );
+        IControllerFacetLike(deployment.controller).usds_mint(1);
+    }
+
+    function _operateDiamond(bytes memory data) internal returns (bytes memory result) {
+        vm.prank(OseroPAUDeployment.oseroOperator());
+        result = IAdministeredAgentLike(deployment.allocatorAgents[0]).call(deployment.controller, data);
+    }
+
+    function _configureSparkLendFacetTest(uint256 usdsAmount)
+        internal
+        returns (bytes32 depositKey, bytes32 withdrawKey)
+    {
+        IControllerFacetLike controller = IControllerFacetLike(deployment.controller);
+        IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
+        address sparkPool = IATokenLike(SPARK_USDS_SPTOKEN).POOL();
+
+        assertEq(IATokenLike(SPARK_USDS_SPTOKEN).UNDERLYING_ASSET_ADDRESS(), USDS);
+
+        _authorizeProxyOnOseroAllocator();
+
+        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
+        controller.usds_setVault(oseroAllocatorVault);
+        controller.aave_setMaxSlippage(SPARK_USDS_SPTOKEN, 1e18);
+
+        depositKey = controller.aave_getDepositRateLimitKey(SPARK_USDS_SPTOKEN, sparkPool, USDS);
+        withdrawKey = controller.aave_getWithdrawRateLimitKey(SPARK_USDS_SPTOKEN, sparkPool);
+
+        rateLimits.setRateLimitData(controller.usds_mintRateLimitKey(), usdsAmount, 0);
+        rateLimits.setRateLimitData(controller.usds_burnRateLimitKey(), usdsAmount, 0);
+        rateLimits.setRateLimitData(depositKey, usdsAmount, 0);
+        rateLimits.setRateLimitData(withdrawKey, usdsAmount, 0);
+        vm.stopPrank();
+
+        assertEq(controller.aave_getMaxSlippage(SPARK_USDS_SPTOKEN), 1e18);
+        assertEq(rateLimits.getCurrentRateLimit(depositKey), usdsAmount);
+        assertEq(rateLimits.getCurrentRateLimit(withdrawKey), usdsAmount);
+    }
+
+    function _deployOseroAllocator() internal {
+        DssInstance memory dss = MCD.loadFromChainlog(DSS_CHAINLOG);
+        address usdsJoin = IChainlogLike(DSS_CHAINLOG).getAddress("USDS_JOIN");
+
+        AllocatorSharedInstance memory sharedInstance;
+        sharedInstance.oracle = address(new AllocatorOracle());
+        sharedInstance.roles = address(new AllocatorRoles());
+        sharedInstance.registry = address(new AllocatorRegistry());
+
+        _switchOwner(sharedInstance.roles, MCD_PAUSE_PROXY);
+        _switchOwner(sharedInstance.registry, MCD_PAUSE_PROXY);
+
+        AllocatorIlkInstance memory ilkInstance;
+        ilkInstance.buffer = address(new AllocatorBuffer());
+        ilkInstance.vault =
+            address(new AllocatorVault(sharedInstance.roles, ilkInstance.buffer, OSERO_ALLOCATOR_ILK, usdsJoin));
+        ilkInstance.owner = MCD_PAUSE_PROXY;
+
+        _switchOwner(ilkInstance.buffer, MCD_PAUSE_PROXY);
+        _switchOwner(ilkInstance.vault, MCD_PAUSE_PROXY);
+
+        AllocatorIlkConfig memory ilkConfig = AllocatorIlkConfig({
+            ilk: OSERO_ALLOCATOR_ILK,
+            duty: EIGHT_PCT_APY,
+            maxLine: 100_000_000 * RAD,
+            gap: 10_000_000 * RAD,
+            ttl: 6 hours,
+            allocatorProxy: OseroPAUDeployment.oseroSubProxy(),
+            ilkRegistry: IChainlogLike(DSS_CHAINLOG).getAddress("ILK_REGISTRY")
+        });
+
+        vm.startPrank(MCD_PAUSE_PROXY);
+        AllocatorInit.initShared(dss, sharedInstance);
+        AllocatorInit.initIlk(dss, sharedInstance, ilkInstance, ilkConfig);
+        vm.stopPrank();
+
+        oseroAllocatorBuffer = ilkInstance.buffer;
+        oseroAllocatorVault = ilkInstance.vault;
+    }
+
+    function _switchOwner(address target, address newOwner) internal {
+        IAuthLike(target).rely(newOwner);
+        IAuthLike(target).deny(address(this));
+    }
+
+    function _authorizeProxyOnOseroAllocator() internal {
+        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
+        IAllocatorVaultLike(oseroAllocatorVault).rely(deployment.proxy);
+        IAllocatorBufferLike(oseroAllocatorBuffer).approve(USDS, deployment.proxy, type(uint256).max);
+        vm.stopPrank();
+
+        assertEq(IAllocatorVaultLike(oseroAllocatorVault).wards(deployment.proxy), 1);
+        assertEq(IERC20Like(USDS).allowance(oseroAllocatorBuffer, deployment.proxy), type(uint256).max);
+        assertEq(IERC20Like(USDS).allowance(oseroAllocatorBuffer, oseroAllocatorVault), type(uint256).max);
     }
 
     function _assertWiresConfigured(IControllerLike.Wire[] memory wires) internal pure {
