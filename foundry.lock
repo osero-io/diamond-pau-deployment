@@ -5,8 +5,20 @@
       "rev": "620536fa5277db4e3fd46772d5cbc1ea0696fb43"
     }
   },
+  "lib/diamond-pau": {
+    "tag": {
+      "name": "v1.13.0",
+      "rev": "5c5ad6ae174bf467081ca82342ced2bd42a5c732"
+    }
+  },
   "lib/osero-address-registry": {
     "rev": "8b7de527d305e1f8ff15b97ba00ae0e51276a541"
+  },
+  "lib/pau-administered-agent": {
+    "tag": {
+      "name": "v1.0.0",
+      "rev": "bfaaf709a8664d74d12604455f0365a0a12439cf"
+    }
   },
   "lib/pau-assemblers": {
     "tag": {

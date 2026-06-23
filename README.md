@@ -28,10 +28,10 @@ The deployment imports addresses and contracts from submodules:
 - `osero-address-registry`: Osero operational addresses, allocator vault/buffer addresses, and ilk constants.
 - `forge-std`: Foundry test and script utilities.
 
-After cloning, initialize submodules before building:
+After cloning, install dependencies before building:
 
 ```shell
-git submodule update --init --recursive
+forge install
 ```
 
 ## Environment
@@ -74,6 +74,70 @@ forge script script/Deploy.s.sol:DeployOseroPAUScript \
 ```
 
 Add `--verify` when contract verification is required and `ETHERSCAN_API_KEY` is set.
+
+## Bytecode Verification
+
+The deployment creates five contracts through internal `CREATE` calls inside Sky's `DefaultPAUAssembler` (`Ethereum.DEFAULT_PAU_ASSEMBLER`), all within a single `deploy(...)` transaction:
+
+| Address | Contract | Source |
+| --- | --- | --- |
+| `0x791D2a017532CfAD881c446e6bF93BbC3c0778b2` | `AccessControls` | `lib/diamond-pau/src/AccessControls.sol` |
+| `0x6d370e359e9cbd0Fd35Bb38fAF705D84238CB884` | `ALMProxy` | `lib/diamond-pau/src/ALMProxy.sol` |
+| `0xe9a78f34fe497e2186f81b8c014cd93b308bc62a` | `RateLimits` | `lib/diamond-pau/src/RateLimits.sol` |
+| `0x24169Afb34fAe4D4356BC54Bd80319131e35ca38` | `Controller` | `lib/diamond-pau/src/Controller.sol` |
+| `0x1837505d104f7a6d8b7e19452610b0a3d652ef12` | `AdministeredAgent` (allocator agent) | `lib/pau-administered-agent/src/AdministeredAgent.sol` |
+
+Because the contracts are created by the assembler rather than by standalone transactions, their creation (init) code never appears as transaction calldata; it exists only in the assembler's memory at the `CREATE` opcode. `forge verify-bytecode` reconstructs the on-chain creation code from the creation transaction, so it fails with `Could not extract the creation code` for every address. `--ignore creation` does not change this: it suppresses a creation-code *mismatch*, not the extraction step itself. Verify the **runtime (deployed) bytecode** and confirm the constructor wiring from on-chain state instead.
+
+### Runtime bytecode
+
+Install dependencies and build with the settings pinned in `foundry.toml` (`solc 0.8.34`, optimizer enabled, `200` runs, `cancun`). The five contracts are compiled as part of the build, producing `out/<File>.sol/<Contract>.json`:
+
+```shell
+forge install
+forge build
+```
+
+Compare each on-chain runtime bytecode against its artifact, excluding the trailing metadata (see below). The artifact field is `deployedBytecode.object`:
+
+```shell
+strip() {                       # read hex on stdin, drop the trailing CBOR metadata
+  local b; b=$(tr -d '\n' | sed 's/^0x//')
+  local n=$(( 16#${b: -4} ))    # last two bytes hold the metadata length
+  printf '%s' "${b:0:$(( ${#b} - (n + 2) * 2 ))}"
+}
+
+addr=0x791D2a017532CfAD881c446e6bF93BbC3c0778b2
+artifact=out/AccessControls.sol/AccessControls.json
+
+onchain=$(cast code --rpc-url mainnet "$addr" | strip)
+local=$(jq -r .deployedBytecode.object "$artifact" | strip)
+[ "$onchain" = "$local" ] && echo match
+```
+
+For `AccessControls`, `ALMProxy`, `RateLimits`, and `AdministeredAgent` this comparison is exact. `Controller` additionally carries an immutable (see below).
+
+### CBOR metadata trailer
+
+solc appends a CBOR-encoded metadata blob to the runtime bytecode; its last two bytes are the big-endian length of the blob, and it embeds an IPFS hash of the compilation metadata (the source-file set, their paths, and the compiler settings). Recompiling identical logic from this repository's layout yields a different IPFS hash than the original compilation, so the trailing bytes differ while the executable code is byte-identical. The comparison above removes the trailer from both sides; everything that remains must match exactly. The compiler-version bytes inside the trailer (immediately after `64736f6c6343`, the CBOR `solc` key) decode to `0.8.34` (`000822`).
+
+### Immutables
+
+`Controller` stores `beacon` as an `immutable`, so its value is embedded in the runtime bytecode while the artifact leaves those positions zeroed and lists them under `deployedBytecode.immutableReferences`. Before comparing, mask those byte ranges on both sides, or substitute `Ethereum.BEACON` (left-padded to 32 bytes) into the artifact. The other three `Controller` constructor arguments are kept in storage and do not appear in the runtime bytecode.
+
+### Constructor arguments
+
+Runtime bytecode does not bind constructor arguments other than immutables, so confirm them from on-chain state. `Controller` exposes its arguments directly:
+
+```shell
+ctrl=0x24169Afb34fAe4D4356BC54Bd80319131e35ca38
+cast call --rpc-url mainnet "$ctrl" "accessControls()(address)"
+cast call --rpc-url mainnet "$ctrl" "proxy()(address)"
+cast call --rpc-url mainnet "$ctrl" "rateLimits()(address)"
+cast call --rpc-url mainnet "$ctrl" "beacon()(address)"
+```
+
+These must equal the `AccessControls`, `ALMProxy`, and `RateLimits` addresses above and `Ethereum.BEACON`. For the remaining contracts the constructor argument only seeds initial access control; check the current role holders with `hasRole(bytes32,address)` against the administrator configuration in `src/OseroPAUDeployment.sol`. The fork tests in `test/OseroPAUDeployment.t.sol` assert this wiring and the role boundaries end to end.
 
 ## Working on deployment configuration
 
