@@ -2,14 +2,6 @@
 pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
-import {AllocatorIlkConfig, AllocatorInit} from "dss-allocator/deploy/AllocatorInit.sol";
-import {AllocatorIlkInstance, AllocatorSharedInstance} from "dss-allocator/deploy/AllocatorInstances.sol";
-import {AllocatorBuffer} from "dss-allocator/src/AllocatorBuffer.sol";
-import {AllocatorOracle} from "dss-allocator/src/AllocatorOracle.sol";
-import {AllocatorRegistry} from "dss-allocator/src/AllocatorRegistry.sol";
-import {AllocatorRoles} from "dss-allocator/src/AllocatorRoles.sol";
-import {AllocatorVault} from "dss-allocator/src/AllocatorVault.sol";
-import {DssInstance, MCD} from "dss-test/MCD.sol";
 
 import {DefaultPAUAssembler, IDefaultPAUAssembler} from "pau-assemblers/DefaultPAUAssembler.sol";
 
@@ -98,22 +90,15 @@ interface IControllerFacetLike {
     function usds_vault() external view returns (address);
 }
 
-interface IChainlogLike {
-    function getAddress(bytes32 key) external view returns (address);
-}
-
-interface IAuthLike {
-    function deny(address usr) external;
+interface IAllocatorVaultLike {
+    function buffer() external view returns (address);
+    function ilk() external view returns (bytes32);
     function rely(address usr) external;
+    function wards(address usr) external view returns (uint256);
 }
 
 interface IAllocatorBufferLike {
     function approve(address asset, address spender, uint256 amount) external;
-}
-
-interface IAllocatorVaultLike {
-    function rely(address usr) external;
-    function wards(address usr) external view returns (uint256);
 }
 
 interface IATokenLike {
@@ -143,15 +128,12 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     address internal constant AAVE_FACET = 0x8CE890A96a193ff2DD4B2eA3C682326F655f6b62;
     address internal constant USDS_FACET = 0x1221CC4B85Ab260660aD21C2829e0EB516dffBc7;
 
-    address internal constant DSS_CHAINLOG = 0xdA0Ab1e0017DEbCd72Be8599041a2aa3bA7e740F;
-    address internal constant MCD_PAUSE_PROXY = 0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB;
+    address internal constant ALLOCATOR_VAULT = 0x146181Aa9B362EaEC2eC3aDd7429a06D53B43d1a;
+    address internal constant ALLOCATOR_BUFFER = 0xD0BB61b34771146e31055f20f329cDf97429F889;
     address internal constant SPARK_USDS_SPTOKEN = 0xC02aB1A5eaA8d1B114EF786D9bde108cD4364359;
     address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
 
-    bytes32 internal constant OSERO_ALLOCATOR_ILK = "OSERO-A";
-
-    uint256 internal constant RAD = 10 ** 45;
-    uint256 internal constant EIGHT_PCT_APY = 1.00000000244041860825840003e27;
+    bytes32 internal constant OSERO_ALLOCATOR_ILK = "ALLOCATOR-PRYSM-A";
 
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -188,9 +170,15 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         expectedRateLimits = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 2);
         expectedController = vm.computeCreateAddress(pauFactory, vm.getNonce(pauFactory) + 3);
 
-        // Deploy the PAU stack, then build the local allocator used by end-to-end tests.
+        // Deploy the PAU stack, then point end-to-end tests at the existing Osero allocator stack.
         deployment = OseroPAUDeployment.deploy();
-        _deployOseroAllocator();
+        oseroAllocatorBuffer = ALLOCATOR_BUFFER;
+        oseroAllocatorVault = ALLOCATOR_VAULT;
+
+        assertGt(oseroAllocatorVault.code.length, 0);
+        assertGt(oseroAllocatorBuffer.code.length, 0);
+        assertEq(IAllocatorVaultLike(oseroAllocatorVault).ilk(), OSERO_ALLOCATOR_ILK);
+        assertEq(IAllocatorVaultLike(oseroAllocatorVault).buffer(), oseroAllocatorBuffer);
     }
 
     function test_configurationLibraryBuildsExpectedInputs() external pure {
@@ -407,7 +395,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         IControllerFacetLike controller = IControllerFacetLike(deployment.controller);
         IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
 
-        // Give the PAU proxy permission to use the local allocator vault and buffer.
+        // Give the PAU proxy permission to use the existing allocator vault and buffer.
         _authorizeProxyOnOseroAllocator();
 
         // Configure the USDS facet to mint from and burn back into the Osero allocator vault.
@@ -522,55 +510,6 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(controller.aave_getMaxSlippage(SPARK_USDS_SPTOKEN), 1e18);
         assertEq(rateLimits.getCurrentRateLimit(depositKey), usdsAmount);
         assertEq(rateLimits.getCurrentRateLimit(withdrawKey), usdsAmount);
-    }
-
-    function _deployOseroAllocator() internal {
-        // Build a minimal Maker allocator instance on the fork for PAU integration tests.
-        DssInstance memory dss = MCD.loadFromChainlog(DSS_CHAINLOG);
-        address usdsJoin = IChainlogLike(DSS_CHAINLOG).getAddress("USDS_JOIN");
-
-        AllocatorSharedInstance memory sharedInstance;
-        sharedInstance.oracle = address(new AllocatorOracle());
-        sharedInstance.roles = address(new AllocatorRoles());
-        sharedInstance.registry = address(new AllocatorRegistry());
-
-        // Hand ownership to the pause proxy so AllocatorInit can initialize shared contracts.
-        _switchOwner(sharedInstance.roles, MCD_PAUSE_PROXY);
-        _switchOwner(sharedInstance.registry, MCD_PAUSE_PROXY);
-
-        AllocatorIlkInstance memory ilkInstance;
-        ilkInstance.buffer = address(new AllocatorBuffer());
-        ilkInstance.vault =
-            address(new AllocatorVault(sharedInstance.roles, ilkInstance.buffer, OSERO_ALLOCATOR_ILK, usdsJoin));
-        ilkInstance.owner = MCD_PAUSE_PROXY;
-
-        // The ilk-level buffer and vault are also initialized under pause-proxy authority.
-        _switchOwner(ilkInstance.buffer, MCD_PAUSE_PROXY);
-        _switchOwner(ilkInstance.vault, MCD_PAUSE_PROXY);
-
-        AllocatorIlkConfig memory ilkConfig = AllocatorIlkConfig({
-            ilk: OSERO_ALLOCATOR_ILK,
-            duty: EIGHT_PCT_APY,
-            maxLine: 100_000_000 * RAD,
-            gap: 10_000_000 * RAD,
-            ttl: 6 hours,
-            allocatorProxy: OseroPAUDeployment.oseroSubProxy(),
-            ilkRegistry: IChainlogLike(DSS_CHAINLOG).getAddress("ILK_REGISTRY")
-        });
-
-        // Initialize the allocator ilk as Maker governance would on mainnet.
-        vm.startPrank(MCD_PAUSE_PROXY);
-        AllocatorInit.initShared(dss, sharedInstance);
-        AllocatorInit.initIlk(dss, sharedInstance, ilkInstance, ilkConfig);
-        vm.stopPrank();
-
-        oseroAllocatorBuffer = ilkInstance.buffer;
-        oseroAllocatorVault = ilkInstance.vault;
-    }
-
-    function _switchOwner(address target, address newOwner) internal {
-        IAuthLike(target).rely(newOwner);
-        IAuthLike(target).deny(address(this));
     }
 
     function _authorizeProxyOnOseroAllocator() internal {
