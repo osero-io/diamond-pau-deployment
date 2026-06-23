@@ -77,13 +77,13 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     uint256 internal constant MAINNET_FORK_BLOCK = 25_374_589;
 
     address internal constant AAVE_FACET = 0x8CE890A96a193ff2DD4B2eA3C682326F655f6b62;
-    address internal constant PSM_FACET = 0xE4A5dAc768a310cc2316f258901b32E499653064;
+    address internal constant USDS_FACET = 0x1221CC4B85Ab260660aD21C2829e0EB516dffBc7;
 
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
 
     bytes32 internal constant AAVE_FACET_INTEGRATION_ID = "AAVE_FACET";
-    bytes32 internal constant PSM_FACET_INTEGRATION_ID = "PSM_FACET";
+    bytes32 internal constant USDS_FACET_INTEGRATION_ID = "USDS_FACET";
 
     DefaultPAUAssembler internal assembler;
     OseroPAUDeployment.Deployment internal deployment;
@@ -117,7 +117,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         bytes32[] memory integrationIds = OseroPAUDeployment.integrationIds();
         assertEq(integrationIds.length, 2);
         assertEq(integrationIds[0], AAVE_FACET_INTEGRATION_ID);
-        assertEq(integrationIds[1], PSM_FACET_INTEGRATION_ID);
+        assertEq(integrationIds[1], USDS_FACET_INTEGRATION_ID);
 
         IDefaultPAUAssembler.AdminConfig memory adminConfig = OseroPAUDeployment.adminConfig();
         assertEq(adminConfig.accessControlAdmins.length, 1);
@@ -298,8 +298,8 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         _assertWiresConfigured(integrations[0].config.wires);
 
         assertEq(integrations[1].id, expectedIntegrationIds[1]);
-        assertEq(integrations[1].config.facet, PSM_FACET);
-        assertEq(integrations[1].config.wires.length, 11);
+        assertEq(integrations[1].config.facet, USDS_FACET);
+        assertEq(integrations[1].config.wires.length, 8);
         _assertWiresConfigured(integrations[1].config.wires);
     }
 

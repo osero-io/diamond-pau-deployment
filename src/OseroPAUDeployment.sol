@@ -22,8 +22,8 @@ library OseroPAUDeployment {
     /// @notice Controller integration ID for the Aave facet.
     bytes32 internal constant AAVE_FACET_INTEGRATION_ID = "AAVE_FACET";
 
-    /// @notice Controller integration ID for the PSM facet.
-    bytes32 internal constant PSM_FACET_INTEGRATION_ID = "PSM_FACET";
+    /// @notice Controller integration ID for the USDS facet.
+    bytes32 internal constant USDS_FACET_INTEGRATION_ID = "USDS_FACET";
 
     /// @notice Addresses returned by the assembler deployment.
     /// @param  proxy           The deployed ALMProxy contract.
@@ -70,11 +70,11 @@ library OseroPAUDeployment {
     }
 
     /// @notice Returns the configured controller integration IDs in deployment order.
-    /// @return ids The Aave and PSM facet integration IDs.
+    /// @return ids The Aave and USDS facet integration IDs.
     function integrationIds() internal pure returns (bytes32[] memory ids) {
         ids = new bytes32[](2);
         ids[0] = AAVE_FACET_INTEGRATION_ID;
-        ids[1] = PSM_FACET_INTEGRATION_ID;
+        ids[1] = USDS_FACET_INTEGRATION_ID;
     }
 
     /// @notice Returns the component default-admin configuration.
