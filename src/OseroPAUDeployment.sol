@@ -33,37 +33,8 @@ library OseroPAUDeployment {
         address[] allocatorAgents;
     }
 
-    /// @notice Returns the assembler used by the canonical deployment.
-    /// @return The DefaultPAUAssembler deployed on mainnet.
-    function defaultPAUAssembler() internal pure returns (DefaultPAUAssembler) {
-        return DEFAULT_PAU_ASSEMBLER;
-    }
-
-    /// @notice Returns the Osero subproxy address.
-    /// @return The address configured as component admin and allocator-agent admin.
-    function oseroSubProxy() internal pure returns (address) {
-        return OseroEthereumRegistry.OSERO_PROXY;
-    }
-
-    /// @notice Returns the Osero operator multisig address.
-    /// @return The address configured as an allocator-agent actor.
-    function oseroOperator() internal pure returns (address) {
-        return OseroEthereumRegistry.OSERO_OPERATOR;
-    }
-
-    /// @notice Returns the Soter Labs relayer multisig address.
-    /// @return The address configured as an allocator-agent actor.
-    function soterRelayer() internal pure returns (address) {
-        return OseroEthereumRegistry.SOTER_OPERATOR;
-    }
-
-    /// @notice Returns the Soter Labs freezer multisig address.
-    /// @return The address configured as an allocator-agent revoker.
-    function soterFreezer() internal pure returns (address) {
-        return OseroEthereumRegistry.SOTER_FREEZER;
-    }
-
     /// @notice Returns the configured controller integration IDs in deployment order.
+    ///         Reference: https://app.notion.com/p/atlas-axis/Osero-Onboard-DPAU-387f2ff08d73807081c7d0f67141aeec
     /// @return ids The Aave and USDS facet integration IDs.
     function integrationIds() internal pure returns (bytes32[] memory ids) {
         ids = new bytes32[](2);

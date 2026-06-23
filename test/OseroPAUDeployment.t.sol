@@ -127,13 +127,14 @@ contract CallTarget {
 
 contract OseroPAUDeployment_Fork_Tests is Test {
     uint256 internal constant MAINNET_FORK_BLOCK = 25_374_589;
+    uint256 internal constant REAL_RATE_LIMIT_MAX = 5_000_000e18;
+    uint256 internal constant REAL_RATE_LIMIT_SLOPE = REAL_RATE_LIMIT_MAX / 1 days;
 
     address internal constant AAVE_FACET = SkyEthereum.AAVE_FACET;
     address internal constant USDS_FACET = SkyEthereum.USDS_FACET;
 
     address internal constant SPARK_USDS_SPTOKEN = 0xC02aB1A5eaA8d1B114EF786D9bde108cD4364359;
     address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
-
 
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -157,7 +158,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         // Pin the fork so deterministic addresses and live protocol state stay stable.
         vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
 
-        assembler = OseroPAUDeployment.defaultPAUAssembler();
+        assembler = DefaultPAUAssembler(SkyEthereum.DEFAULT_PAU_ASSEMBLER);
         pauFactory = assembler.pauFactory();
 
         // Pre-compute CREATE addresses before deploy() consumes the factory nonces.
@@ -193,9 +194,9 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(adminConfig.accessControlAdmins.length, 1);
         assertEq(adminConfig.proxyAdmins.length, 1);
         assertEq(adminConfig.rateLimitsAdmins.length, 1);
-        assertEq(adminConfig.accessControlAdmins[0], OseroPAUDeployment.oseroSubProxy());
-        assertEq(adminConfig.proxyAdmins[0], OseroPAUDeployment.oseroSubProxy());
-        assertEq(adminConfig.rateLimitsAdmins[0], OseroPAUDeployment.oseroSubProxy());
+        assertEq(adminConfig.accessControlAdmins[0], Ethereum.OSERO_PROXY);
+        assertEq(adminConfig.proxyAdmins[0], Ethereum.OSERO_PROXY);
+        assertEq(adminConfig.rateLimitsAdmins[0], Ethereum.OSERO_PROXY);
 
         // The allocator agent config should expose only the intended operators and freezer.
         IDefaultPAUAssembler.AdministeredAgentConfig[] memory allocatorAgentConfigs =
@@ -205,10 +206,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(allocatorAgentConfigs[0].actors.length, 2);
         assertEq(allocatorAgentConfigs[0].grantors.length, 0);
         assertEq(allocatorAgentConfigs[0].revokers.length, 1);
-        assertEq(allocatorAgentConfigs[0].admins[0], OseroPAUDeployment.oseroSubProxy());
-        assertEq(allocatorAgentConfigs[0].actors[0], OseroPAUDeployment.soterRelayer());
-        assertEq(allocatorAgentConfigs[0].actors[1], OseroPAUDeployment.oseroOperator());
-        assertEq(allocatorAgentConfigs[0].revokers[0], OseroPAUDeployment.soterFreezer());
+        assertEq(allocatorAgentConfigs[0].admins[0], Ethereum.OSERO_PROXY);
+        assertEq(allocatorAgentConfigs[0].actors[0], Ethereum.SOTER_OPERATOR);
+        assertEq(allocatorAgentConfigs[0].actors[1], Ethereum.OSERO_OPERATOR);
+        assertEq(allocatorAgentConfigs[0].revokers[0], Ethereum.SOTER_FREEZER);
     }
 
     function test_deploysExpectedAddressesAndCode() external view {
@@ -230,7 +231,7 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function test_deploymentEventMatchesLibraryConfiguration() external {
-        assembler = OseroPAUDeployment.defaultPAUAssembler();
+        assembler = DefaultPAUAssembler(SkyEthereum.DEFAULT_PAU_ASSEMBLER);
         pauFactory = assembler.pauFactory();
 
         // Recompute expected addresses against the current factory nonces for this deploy.
@@ -266,10 +267,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
     }
 
     function test_adminRolesAndRoleBoundaries() external view {
-        address oseroSubProxy = OseroPAUDeployment.oseroSubProxy();
-        address oseroOperator = OseroPAUDeployment.oseroOperator();
-        address soterFreezer = OseroPAUDeployment.soterFreezer();
-        address soterRelayer = OseroPAUDeployment.soterRelayer();
+        address oseroSubProxy = Ethereum.OSERO_PROXY;
+        address oseroOperator = Ethereum.OSERO_OPERATOR;
+        address soterFreezer = Ethereum.SOTER_FREEZER;
+        address soterRelayer = Ethereum.SOTER_OPERATOR;
 
         // AccessControls owns PAU-wide roles; only the allocator agent gets ALLOCATOR_ROLE.
         IAccessControlLike accessControls = IAccessControlLike(deployment.accessControls);
@@ -306,10 +307,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         address allocatorAgentAddress = deployment.allocatorAgents[0];
         IAdministeredAgentLike allocatorAgent = IAdministeredAgentLike(allocatorAgentAddress);
 
-        address oseroSubProxy = OseroPAUDeployment.oseroSubProxy();
-        address oseroOperator = OseroPAUDeployment.oseroOperator();
-        address soterFreezer = OseroPAUDeployment.soterFreezer();
-        address soterRelayer = OseroPAUDeployment.soterRelayer();
+        address oseroSubProxy = Ethereum.OSERO_PROXY;
+        address oseroOperator = Ethereum.OSERO_OPERATOR;
+        address soterFreezer = Ethereum.SOTER_FREEZER;
+        address soterRelayer = Ethereum.SOTER_OPERATOR;
 
         // Agent membership counts lock down the intended role surface.
         assertEq(allocatorAgent.adminCount(), 1);
@@ -344,14 +345,14 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         CallTarget target = new CallTarget();
 
         // Soter relayer can execute through the agent, and the target sees the agent as msg.sender.
-        vm.prank(OseroPAUDeployment.soterRelayer());
+        vm.prank(Ethereum.SOTER_OPERATOR);
         bytes memory relayerResult = allocatorAgent.call(address(target), abi.encodeCall(CallTarget.record, ()));
         assertEq(abi.decode(relayerResult, (address)), deployment.allocatorAgents[0]);
         assertEq(target.lastSender(), deployment.allocatorAgents[0]);
         assertEq(target.callCount(), 1);
 
         // Osero operator has the same actor path and increments the target call count.
-        vm.prank(OseroPAUDeployment.oseroOperator());
+        vm.prank(Ethereum.OSERO_OPERATOR);
         bytes memory operatorResult = allocatorAgent.call(address(target), abi.encodeCall(CallTarget.record, ()));
         assertEq(abi.decode(operatorResult, (address)), deployment.allocatorAgents[0]);
         assertEq(target.lastSender(), deployment.allocatorAgents[0]);
@@ -399,41 +400,45 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         _authorizeProxyOnOseroAllocator();
 
         // Configure the USDS facet to mint from and burn back into the Osero allocator vault.
-        vm.prank(OseroPAUDeployment.oseroSubProxy());
+        vm.prank(Ethereum.OSERO_PROXY);
         controller.usds_setVault(oseroAllocatorVault);
         assertEq(controller.usds_vault(), oseroAllocatorVault);
 
         bytes32 mintKey = controller.usds_mintRateLimitKey();
         bytes32 burnKey = controller.usds_burnRateLimitKey();
 
-        // Seed one-shot mint and burn limits so each operation must consume its own key.
-        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
-        rateLimits.setRateLimitData(mintKey, usdsAmount, 0);
-        rateLimits.setRateLimitData(burnKey, usdsAmount, 0);
+        // Configure the granted production limits: 5,000,000 USDS max with full daily recovery.
+        vm.startPrank(Ethereum.OSERO_PROXY);
+        rateLimits.setRateLimitData(mintKey, REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
+        rateLimits.setRateLimitData(burnKey, REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
         vm.stopPrank();
 
-        assertEq(rateLimits.getCurrentRateLimit(mintKey), usdsAmount);
-        assertEq(rateLimits.getCurrentRateLimit(burnKey), usdsAmount);
+        _assertRealRateLimit(rateLimits, mintKey, REAL_RATE_LIMIT_MAX);
+        _assertRealRateLimit(rateLimits, burnKey, REAL_RATE_LIMIT_MAX);
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
 
         // Mint through the allocator agent; the proxy receives USDS and spends the mint limit.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
 
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
-        assertEq(rateLimits.getCurrentRateLimit(mintKey), 0);
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), REAL_RATE_LIMIT_MAX - usdsAmount);
 
         // Burn through the same path; USDS returns to zero and the burn limit is consumed.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
 
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
-        assertEq(rateLimits.getCurrentRateLimit(burnKey), 0);
-        assertEq(rateLimits.getCurrentRateLimit(mintKey), usdsAmount);
+        assertEq(rateLimits.getCurrentRateLimit(burnKey), REAL_RATE_LIMIT_MAX - usdsAmount);
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), REAL_RATE_LIMIT_MAX);
+
+        vm.warp(block.timestamp + 1 days);
+        assertEq(rateLimits.getCurrentRateLimit(mintKey), REAL_RATE_LIMIT_MAX);
+        assertEq(rateLimits.getCurrentRateLimit(burnKey), REAL_RATE_LIMIT_MAX);
     }
 
     function test_endToEnd_usdsFacetFundsSparkLendAaveFacet() external {
         uint256 usdsAmount = 100e18;
         // Configure USDS, Aave, and rate-limit state shared by the Spark Lend flow.
-        (bytes32 depositKey, bytes32 withdrawKey) = _configureSparkLendFacetTest(usdsAmount);
+        (bytes32 depositKey, bytes32 withdrawKey) = _configureSparkLendFacetTest();
 
         // Start with freshly minted USDS held by the PAU proxy.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_mint, (usdsAmount)));
@@ -444,7 +449,9 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         _operateDiamond(abi.encodeCall(IControllerFacetLike.aave_deposit, (SPARK_USDS_SPTOKEN, usdsAmount)));
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), 0);
         assertGe(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), usdsAmount);
-        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), 0);
+        assertEq(
+            IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), REAL_RATE_LIMIT_MAX - usdsAmount
+        );
 
         // Withdraw back to USDS and verify the facet returns the withdrawn amount.
         bytes memory withdrawResult =
@@ -453,8 +460,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         assertEq(abi.decode(withdrawResult, (uint256)), usdsAmount);
         assertEq(IERC20Like(USDS).balanceOf(deployment.proxy), usdsAmount);
         assertEq(IERC20Like(SPARK_USDS_SPTOKEN).balanceOf(deployment.proxy), 0);
-        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(withdrawKey), 0);
-        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), usdsAmount);
+        assertEq(
+            IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(withdrawKey), REAL_RATE_LIMIT_MAX - usdsAmount
+        );
+        assertEq(IRateLimitsLike(deployment.rateLimits).getCurrentRateLimit(depositKey), REAL_RATE_LIMIT_MAX);
 
         // Burn the withdrawn USDS so the end-to-end flow exits with no proxy balance.
         _operateDiamond(abi.encodeCall(IControllerFacetLike.usds_burn, (usdsAmount)));
@@ -463,10 +472,10 @@ contract OseroPAUDeployment_Fork_Tests is Test {
 
     function test_endToEnd_operatorCannotBypassAllocatorAgent() external {
         // Operators must route through the allocator agent; direct controller calls lack ALLOCATOR_ROLE.
-        vm.prank(OseroPAUDeployment.oseroOperator());
+        vm.prank(Ethereum.OSERO_OPERATOR);
         vm.expectRevert(
             abi.encodeWithSignature(
-                "AccessControlUnauthorizedAccount(address,bytes32)", OseroPAUDeployment.oseroOperator(), ALLOCATOR_ROLE
+                "AccessControlUnauthorizedAccount(address,bytes32)", Ethereum.OSERO_OPERATOR, ALLOCATOR_ROLE
             )
         );
         IControllerFacetLike(deployment.controller).usds_mint(1);
@@ -474,14 +483,11 @@ contract OseroPAUDeployment_Fork_Tests is Test {
 
     function _operateDiamond(bytes memory data) internal returns (bytes memory result) {
         // All mutating controller calls in these tests execute via the configured operator path.
-        vm.prank(OseroPAUDeployment.oseroOperator());
+        vm.prank(Ethereum.OSERO_OPERATOR);
         result = IAdministeredAgentLike(deployment.allocatorAgents[0]).call(deployment.controller, data);
     }
 
-    function _configureSparkLendFacetTest(uint256 usdsAmount)
-        internal
-        returns (bytes32 depositKey, bytes32 withdrawKey)
-    {
+    function _configureSparkLendFacetTest() internal returns (bytes32 depositKey, bytes32 withdrawKey) {
         IControllerFacetLike controller = IControllerFacetLike(deployment.controller);
         IRateLimitsLike rateLimits = IRateLimitsLike(deployment.rateLimits);
         address sparkPool = IATokenLike(SPARK_USDS_SPTOKEN).POOL();
@@ -493,28 +499,35 @@ contract OseroPAUDeployment_Fork_Tests is Test {
         _authorizeProxyOnOseroAllocator();
 
         // Configure facet state and per-operation rate limits as the Osero subproxy admin.
-        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
+        vm.startPrank(Ethereum.OSERO_PROXY);
         controller.usds_setVault(oseroAllocatorVault);
         controller.aave_setMaxSlippage(SPARK_USDS_SPTOKEN, 1e18);
 
         depositKey = controller.aave_getDepositRateLimitKey(SPARK_USDS_SPTOKEN, sparkPool, USDS);
         withdrawKey = controller.aave_getWithdrawRateLimitKey(SPARK_USDS_SPTOKEN, sparkPool);
 
-        rateLimits.setRateLimitData(controller.usds_mintRateLimitKey(), usdsAmount, 0);
-        rateLimits.setRateLimitData(controller.usds_burnRateLimitKey(), usdsAmount, 0);
-        rateLimits.setRateLimitData(depositKey, usdsAmount, 0);
-        rateLimits.setRateLimitData(withdrawKey, usdsAmount, 0);
+        rateLimits.setRateLimitData(controller.usds_mintRateLimitKey(), REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
+        rateLimits.setRateLimitData(controller.usds_burnRateLimitKey(), REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
+        rateLimits.setRateLimitData(depositKey, REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
+        rateLimits.setRateLimitData(withdrawKey, REAL_RATE_LIMIT_MAX, REAL_RATE_LIMIT_SLOPE);
         vm.stopPrank();
 
         // Confirm setup took effect before the caller exercises deposit or withdrawal paths.
         assertEq(controller.aave_getMaxSlippage(SPARK_USDS_SPTOKEN), 1e18);
-        assertEq(rateLimits.getCurrentRateLimit(depositKey), usdsAmount);
-        assertEq(rateLimits.getCurrentRateLimit(withdrawKey), usdsAmount);
+        _assertRealRateLimit(rateLimits, depositKey, REAL_RATE_LIMIT_MAX);
+        _assertRealRateLimit(rateLimits, withdrawKey, REAL_RATE_LIMIT_MAX);
+    }
+
+    function _assertRealRateLimit(IRateLimitsLike rateLimits, bytes32 key, uint256 currentLimit) internal view {
+        IRateLimitsLike.RateLimitData memory data = rateLimits.getRateLimitData(key);
+        assertEq(data.maxAmount, REAL_RATE_LIMIT_MAX);
+        assertEq(data.slope, REAL_RATE_LIMIT_SLOPE);
+        assertEq(rateLimits.getCurrentRateLimit(key), currentLimit);
     }
 
     function _authorizeProxyOnOseroAllocator() internal {
         // Osero subproxy grants PAU vault authority and buffer allowance for USDS movements.
-        vm.startPrank(OseroPAUDeployment.oseroSubProxy());
+        vm.startPrank(Ethereum.OSERO_PROXY);
         IAllocatorVaultLike(oseroAllocatorVault).rely(deployment.proxy);
         IAllocatorBufferLike(oseroAllocatorBuffer).approve(USDS, deployment.proxy, type(uint256).max);
         vm.stopPrank();

@@ -1,66 +1,103 @@
-## Foundry
+# Osero PAU Deployment
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository contains the canonical Foundry deployment package for the Osero PAU stack on Ethereum mainnet.
 
-Foundry consists of:
+The code does not implement new PAU facets. It composes existing Sky PAU contracts and Osero registry addresses into one deployment configuration:
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- deploy a PAU proxy, controller, access-control contract, and rate-limit contract through Sky's `DefaultPAUAssembler`;
+- enable the `AAVE_FACET` and `USDS_FACET` controller integrations in a fixed order;
+- configure Osero's proxy as the component administrator;
+- configure one allocator `AdministeredAgent` administered by Osero, operated by the Soter relayer and Osero operator, and revocable by the Soter freezer.
 
-## Documentation
+## Repository layout
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```text
+src/OseroPAUDeployment.sol      Shared deployment library and configuration.
+script/Deploy.s.sol            Broadcast script that calls the deployment library and logs addresses.
+test/OseroPAUDeployment.t.sol   Mainnet-fork tests covering deployment config, permissions, wiring, and USDS/Aave flows.
+foundry.toml                   Foundry compiler, remapping, RPC, and Etherscan settings.
+lib/                           Git submodules for PAU assemblers, registries, and forge-std.
 ```
 
-### Test
+## External dependencies
+
+The deployment imports addresses and contracts from submodules:
+
+- `sky-pau-registry`: Sky PAU mainnet contract addresses, including `DEFAULT_PAU_ASSEMBLER`, `AAVE_FACET`, and `USDS_FACET`.
+- `pau-assemblers`: `DefaultPAUAssembler` and assembler interfaces.
+- `osero-address-registry`: Osero operational addresses, allocator vault/buffer addresses, and ilk constants.
+- `forge-std`: Foundry test and script utilities.
+
+After cloning, initialize submodules before building:
 
 ```shell
-$ forge test
+git submodule update --init --recursive
 ```
 
-### Format
+## Environment
+
+The test suite forks Ethereum mainnet and `foundry.toml` resolves the `mainnet` RPC endpoint from `MAINNET_RPC_URL`.
 
 ```shell
-$ forge fmt
+export MAINNET_RPC_URL=<ethereum-mainnet-rpc-url>
+export ETHERSCAN_API_KEY=<etherscan-api-key> # only needed for verification
 ```
 
-### Gas Snapshots
+## Build and test
 
 ```shell
-$ forge snapshot
+forge build
+forge test
 ```
 
-### Anvil
+Run the deployment test suite only:
 
 ```shell
-$ anvil
+forge test --match-path test/OseroPAUDeployment.t.sol
 ```
 
-### Deploy
+Format Solidity before committing:
 
 ```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+forge fmt
 ```
 
-### Cast
+## Deployment
+
+The deploy script broadcasts `OseroPAUDeployment.deploy()` and prints the deployed PAU component addresses.
 
 ```shell
-$ cast <subcommand>
+forge script script/Deploy.s.sol:DeployOseroPAUScript \
+  --rpc-url mainnet \
+  --private-key <deployer-private-key> \
+  --broadcast
 ```
 
-### Help
+Add `--verify` when contract verification is required and `ETHERSCAN_API_KEY` is set.
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Working on deployment configuration
+
+Most changes should be made in `src/OseroPAUDeployment.sol`:
+
+- integration IDs belong in `integrationIds()`;
+- component administrators belong in `adminConfig()` / `_componentAdmins()`;
+- allocator agent admins, actors, grantors, and revokers belong in `allocatorAgentConfigs()`;
+- deployment execution belongs in `deploy()`.
+
+Keep registry-owned addresses in their registries. Import constants from `sky-pau-registry` or `osero-address-registry` instead of copying literal addresses into this repository.
+
+The fork tests intentionally assert both configuration and live behavior:
+
+- deterministic CREATE addresses from the assembler factories;
+- deployed bytecode presence;
+- admin and allocator-agent role boundaries;
+- controller integration order and facet wiring;
+- USDS mint/burn through the Osero allocator vault;
+- USDS deposit/withdraw through Spark Lend via the Aave facet;
+- prevention of direct operator calls that bypass the allocator agent.
+
+Update tests with any deployment configuration change. A passing build alone is not enough for this repository because the deployment depends on live mainnet state.
+
+## License
+
+AGPL-3.0-or-later. The Solidity sources use `SPDX-License-Identifier: AGPL-3.0-or-later`.

@@ -10,12 +10,3 @@
 [submodule "lib/osero-address-registry"]
 	path = lib/osero-address-registry
 	url = https://github.com/osero-io/osero-address-registry
-[submodule "lib/dss-allocator"]
-	path = lib/dss-allocator
-	url = https://github.com/makerdao/dss-allocator
-[submodule "lib/dss-test"]
-	path = lib/dss-test
-	url = https://github.com/makerdao/dss-test
-[submodule "lib/dss-interfaces"]
-	path = lib/dss-interfaces
-	url = https://github.com/makerdao/dss-interfaces
