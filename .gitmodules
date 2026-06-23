@@ -7,6 +7,6 @@
 [submodule "lib/sky-pau-registry"]
 	path = lib/sky-pau-registry
 	url = https://github.com/sky-ecosystem/sky-pau-registry
-[submodule "lib/address-registry"]
-	path = lib/address-registry
-	url = https://github.com/osero-io/address-registry
+[submodule "lib/osero-address-registry"]
+	path = lib/osero-address-registry
+	url = https://github.com/osero-io/osero-address-registry

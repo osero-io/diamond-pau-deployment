@@ -8,7 +8,7 @@ optimizer_runs = 200
 evm_version = 'cancun'
 
 remappings = [
-    "@osero/address-registry/=lib/address-registry/src/"
+    "@osero/address-registry/=lib/osero-address-registry/src/"
 ]
 
 [etherscan]

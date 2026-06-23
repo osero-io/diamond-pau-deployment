@@ -13,12 +13,6 @@ library OseroPAUDeployment {
     /// @notice Mainnet DefaultPAUAssembler used to deploy and wire the PAU contracts.
     DefaultPAUAssembler internal constant DEFAULT_PAU_ASSEMBLER = DefaultPAUAssembler(Ethereum.DEFAULT_PAU_ASSEMBLER);
 
-    /// @notice Soter Labs relayer multisig authorized as an allocator-agent actor.
-    address internal constant SOTER_RELAYER = 0x3dE688267Cf099307aBdd85F64D8efe03D0b2b26;
-
-    /// @notice Soter Labs freezer multisig authorized to revoke allocator-agent permissions.
-    address internal constant SOTER_FREEZER = 0xF61F90907551a8A23f0f8EEE9658Fa53326de603;
-
     /// @notice Controller integration ID for the Aave facet.
     bytes32 internal constant AAVE_FACET_INTEGRATION_ID = "AAVE_FACET";
 
@@ -60,13 +54,13 @@ library OseroPAUDeployment {
     /// @notice Returns the Soter Labs relayer multisig address.
     /// @return The address configured as an allocator-agent actor.
     function soterRelayer() internal pure returns (address) {
-        return SOTER_RELAYER;
+        return OseroEthereumRegistry.SOTER_OPERATOR;
     }
 
     /// @notice Returns the Soter Labs freezer multisig address.
     /// @return The address configured as an allocator-agent revoker.
     function soterFreezer() internal pure returns (address) {
-        return SOTER_FREEZER;
+        return OseroEthereumRegistry.SOTER_FREEZER;
     }
 
     /// @notice Returns the configured controller integration IDs in deployment order.
@@ -96,11 +90,11 @@ library OseroPAUDeployment {
         returns (IDefaultPAUAssembler.AdministeredAgentConfig[] memory configs)
     {
         address[] memory allocatorActors = new address[](2);
-        allocatorActors[0] = SOTER_RELAYER;
+        allocatorActors[0] = OseroEthereumRegistry.SOTER_OPERATOR;
         allocatorActors[1] = OseroEthereumRegistry.OSERO_OPERATOR;
 
         address[] memory allocatorRevokers = new address[](1);
-        allocatorRevokers[0] = SOTER_FREEZER;
+        allocatorRevokers[0] = OseroEthereumRegistry.SOTER_FREEZER;
 
         configs = new IDefaultPAUAssembler.AdministeredAgentConfig[](1);
         configs[0] = IDefaultPAUAssembler.AdministeredAgentConfig({
