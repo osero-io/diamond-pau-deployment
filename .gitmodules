@@ -16,3 +16,6 @@
 [submodule "lib/diamond-pau"]
 	path = lib/diamond-pau
 	url = https://github.com/sky-ecosystem/diamond-pau
+[submodule "lib/spark-gov-relay"]
+	path = lib/spark-gov-relay
+	url = https://github.com/sparkdotfi/spark-gov-relay

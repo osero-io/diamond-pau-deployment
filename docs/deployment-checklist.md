@@ -318,3 +318,138 @@ devenv shell forge build
 devenv shell forge test --match-path test/OseroPAUDeployment.t.sol
 devenv shell cast receipt --rpc-url mainnet 0xff3acce7d732e47730320fa202a8553626fc14286048be4c3c1a5fb173e43640 --json
 ```
+
+# Executor.sol (Osero Executor on Base)
+
+Address: _pending deployment_ (record as a Basescan link)
+
+Deployment tx: _pending deployment_ (record as a Basescan link)
+
+## Deployment Checklist
+
+### General rules
+
+- [ ] A different deployer EOA shall be used across different chains.
+  - Planned: a fresh EOA used only for Osero's Base deployments. It must not be the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`; `DeployBaseGovRelay.s.sol` rejects that address.
+- [ ] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+- [ ] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+  - Planned: Ledger (`--ledger`) or an encrypted keystore (`--account`). `.env` holds only `BASE_RPC_URL`, `MAINNET_RPC_URL` and `ETHERSCAN_API_KEY`.
+
+### Deployment preparation
+
+- [ ] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+- [ ] Note down your Foundry version used for the deployments.
+- [ ] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sparkdotfi/spark-gov-relay/commit/5c166763464802a9f985fa50560c9e9fb0cf6c2b (tag `v1.0.1`, final audited commit; reports in `lib/spark-gov-relay/audits/`).
+- [ ] Freshly clone the repository with the contract at the commit determined above.
+  - `lib/spark-gov-relay` must be checked out at `5c166763464802a9f985fa50560c9e9fb0cf6c2b` (`foundry.lock`: `v1.0.1`), with `lib/spark-gov-relay/lib/openzeppelin-contracts` at `dbb6104ce834628e473d2173bbc9d47f81a9eec3`.
+- [ ] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [ ] Check the deployer address to match the expected value and expected transaction history.
+  - Expected: Base deployer `<base deployer>` with no prior transactions (nonce `0`), or only Osero Base deployments.
+- [ ] Ensure the deployer has enough gas tokens.
+  - Fork dry-run estimate: `2,937,209` gas for all four transactions (about `0.00003` ETH at `0.0108` gwei); fund with a generous margin.
+- [ ] Document the command planned to be used to perform the deployment.
+
+```bash
+FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol \
+  --rpc-url base \
+  --ledger \
+  --sender <base deployer> \
+  --hd-paths "<redacted-ledger-hd-path>" \
+  --slow \
+  --broadcast \
+  --verify
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - Fork dry-run first: `FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol --rpc-url base --sender <base deployer>`. Expect four transactions from the deployer: create `Executor(0, 604800)`, create `OptimismReceiver(0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3, executor)`, `grantRole(SUBMISSION_ROLE, receiver)`, `revokeRole(DEFAULT_ADMIN_ROLE, deployer)`.
+
+### Deployment
+
+- [ ] Set production RPC URL.
+  - `BASE_RPC_URL`.
+- [ ] Set API key for the verification provider compatible with the target chain.
+  - `ETHERSCAN_API_KEY` (Etherscan API v2, chain `8453`).
+- [ ] Execute the production deployment command with verification enabled.
+- [ ] Inspect the transaction history of the deployer.
+  - Expect exactly the four transactions above, in that order.
+- [ ] Perform all relevant checks documented in the technical doc.
+  - Basescan verification with `v0.8.25+commit.b61c2a91`, optimizer enabled, `200` runs, EVM `cancun`, no via-IR.
+  - Runtime bytecode matches `gov-relay/out/Executor.sol/Executor.json` and Grove's Executor `0x491EDFB0B8b608044e227225C715981a30F3A44E` after stripping the solc CBOR metadata (README "Base governance relay" > "Bytecode verification").
+  - `delay() == 0`, `gracePeriod() == 604800`; `DEFAULT_ADMIN_ROLE` held by the Executor itself and not the deployer; `SUBMISSION_ROLE` held by the Receiver; no `GUARDIAN_ROLE` holder.
+  - Post-deploy tests pass: `POSTDEPLOY_OUTPUT=gov-relay/output/8453/base-gov-relay-latest.json FOUNDRY_PROFILE=gov-relay forge test --match-path gov-relay/test/OseroBaseGovRelayPostDeploy.t.sol -vvv`.
+- [ ] Independently verify the deployment by another member of the team.
+
+# OptimismReceiver.sol (Osero Receiver on Base)
+
+Address: _pending deployment_ (record as a Basescan link)
+
+Deployment tx: _pending deployment_ (record as a Basescan link)
+
+## Deployment Checklist
+
+### General rules
+
+- [ ] A different deployer EOA shall be used across different chains.
+  - Planned: the same Base-only deployer as the Executor, never the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`.
+- [ ] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+- [ ] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+  - Planned: Ledger (`--ledger`) or an encrypted keystore (`--account`). `.env` holds only `BASE_RPC_URL`, `MAINNET_RPC_URL` and `ETHERSCAN_API_KEY`.
+
+### Deployment preparation
+
+- [ ] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+- [ ] Note down your Foundry version used for the deployments.
+- [ ] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/xchain-helpers/commit/6be2397aa4f6e9465a763f609e25a9111ffff200 (pinned by spark-gov-relay `v1.0.1` as `lib/xchain-helpers`, submodule URL `marsfoundation/xchain-helpers`; `OptimismReceiver.sol` is identical to xchain-helpers `v1.2.0`).
+- [ ] Freshly clone the repository with the contract at the commit determined above.
+  - `lib/spark-gov-relay/lib/xchain-helpers` must be checked out at `6be2397aa4f6e9465a763f609e25a9111ffff200`, and `OptimismReceiver` compiled against `lib/spark-gov-relay/lib/openzeppelin-contracts` (`dbb6104ce834628e473d2173bbc9d47f81a9eec3`).
+- [ ] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [ ] Check the deployer address to match the expected value and expected transaction history.
+  - Expected: the Base deployer `<base deployer>`; the Receiver is its next transaction after the Executor creation (nonce `n + 1`).
+- [ ] Ensure the deployer has enough gas tokens.
+  - Covered by the single script run (see the Executor entry).
+- [ ] Document the command planned to be used to perform the deployment.
+
+```bash
+FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol \
+  --rpc-url base \
+  --ledger \
+  --sender <base deployer> \
+  --hd-paths "<redacted-ledger-hd-path>" \
+  --slow \
+  --broadcast \
+  --verify
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - Same run as the Executor entry; the Receiver's constructor arguments must be `(0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3, executor)`.
+
+### Deployment
+
+- [ ] Set production RPC URL.
+  - `BASE_RPC_URL`.
+- [ ] Set API key for the verification provider compatible with the target chain.
+  - `ETHERSCAN_API_KEY` (Etherscan API v2, chain `8453`).
+- [ ] Execute the production deployment command with verification enabled.
+- [ ] Inspect the transaction history of the deployer.
+  - Expect exactly the four transactions of the script, the Receiver creation second.
+- [ ] Perform all relevant checks documented in the technical doc.
+  - Basescan verification with `v0.8.25+commit.b61c2a91`, optimizer enabled, `200` runs, EVM `cancun`, no via-IR.
+  - Runtime bytecode matches `gov-relay/out/OptimismReceiver.sol/OptimismReceiver.json` and Grove's Receiver `0x5F5cfCB8a463868E37Ab27B5eFF3ba02112dF19a` after stripping the solc CBOR metadata and masking the `l1Authority` and `target` immutables (README "Base governance relay" > "Bytecode verification").
+  - `l1Authority() == 0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3` (Osero SubProxy, chainlog `OSERO_SUBPROXY`), `target() ==` the Executor, `l2CrossDomain() == 0x4200000000000000000000000000000000000007`.
+  - Post-deploy tests pass (see the Executor entry), including the cross-check that the Receiver was created by the deployer after the Executor.
+- [ ] Independently verify the deployment by another member of the team.
+
+# Reproduction commands (Base governance relay)
+
+```bash
+git submodule update --init --recursive
+forge --version
+FOUNDRY_PROFILE=gov-relay forge build
+FOUNDRY_PROFILE=gov-relay forge test
+POSTDEPLOY_OUTPUT=gov-relay/output/8453/base-gov-relay-latest.json \
+  FOUNDRY_PROFILE=gov-relay forge test --match-path gov-relay/test/OseroBaseGovRelayPostDeploy.t.sol -vvv
+```

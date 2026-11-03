@@ -35,3 +35,21 @@ jobs:
         run: forge test -vvv
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+
+      # Base governance relay: separate profile (solc 0.8.25) compiling only gov-relay/.
+      - name: Run Forge fmt (gov-relay)
+        run: forge fmt --check
+        env:
+          FOUNDRY_PROFILE: gov-relay
+
+      - name: Run Forge build (gov-relay)
+        run: forge build --sizes
+        env:
+          FOUNDRY_PROFILE: gov-relay
+
+      - name: Run Forge tests (gov-relay)
+        run: forge test -vvv
+        env:
+          FOUNDRY_PROFILE: gov-relay
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
