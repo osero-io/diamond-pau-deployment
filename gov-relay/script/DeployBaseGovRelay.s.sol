@@ -117,8 +117,9 @@ contract DeployBaseGovRelayScript is Script {
         internal
         returns (string memory outputPath)
     {
-        bool broadcasting =
-            vm.isContext(VmSafe.ForgeContext.ScriptBroadcast) || vm.isContext(VmSafe.ForgeContext.ScriptResume);
+        // Only a fresh `--broadcast` run writes the real record. Anything else, including a resumed run,
+        // goes to dry-run/ so it can never overwrite the addresses that were actually deployed.
+        bool broadcasting = vm.isContext(VmSafe.ForgeContext.ScriptBroadcast);
         string memory dir = broadcasting ? OUTPUT_DIR : string.concat(OUTPUT_DIR, "/dry-run");
         outputPath = string.concat(dir, "/", OUTPUT_FILE);
 
