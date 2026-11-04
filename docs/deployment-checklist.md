@@ -332,7 +332,7 @@ Deployment tx: [`0x576ecf4a8b1a375db0b5de1a66fd355c149fb0ec22e17ed4d3eb23049ef21
 - [x] A different deployer EOA shall be used across different chains.
   - Base deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C) is a fresh EOA created for Osero's Base deployments. It is not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696` (which `DeployBaseGovRelay.s.sol` rejects), and it has sent no transaction on Ethereum mainnet (nonce `0`).
 - [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
-  - Base nonce is `4`: the deployer sent only the four transactions of `DeployBaseGovRelay.s.sol` (two creations, one `grantRole`, one `revokeRole`).
+  - Base nonce is `9`: the four `DeployBaseGovRelay.s.sol` transactions (nonces `0` to `3`: two creations, one `grantRole`, one `revokeRole`), then the five Base PAU factory calls of `DeployPAU.s.sol` (nonces `4` to `8`, see the Base PAU entries below).
 - [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
 
 ### Deployment preparation
@@ -384,6 +384,7 @@ FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol
     - [`0x5aa8789aa53241e4cb71283626f5bd56dbbe5279120740ca00517909ab15c65c`](https://basescan.org/tx/0x5aa8789aa53241e4cb71283626f5bd56dbbe5279120740ca00517909ab15c65c): create OptimismReceiver, block `53470353`, `284,263` gas.
     - [`0xb33e345fa9b502558f9035d925312ec4639d5ef4ab7a5cb1ee49d41fe59ad3e7`](https://basescan.org/tx/0xb33e345fa9b502558f9035d925312ec4639d5ef4ab7a5cb1ee49d41fe59ad3e7): `grantRole(SUBMISSION_ROLE, receiver)`, block `53470359`, `51,552` gas.
     - [`0xd4b23ae93b3b92cc84ec925272e28c5478321acd1994434bd2b96b679fff970c`](https://basescan.org/tx/0xd4b23ae93b3b92cc84ec925272e28c5478321acd1994434bd2b96b679fff970c): `revokeRole(DEFAULT_ADMIN_ROLE, deployer)`, block `53470367`, `27,159` gas.
+  - The deployer's next outgoing transactions are the five Base PAU factory calls (nonces `4` to `8`, block `53475691`); see the Base PAU entries below.
   - The only incoming transfer on Base was the funding of `0.004194` ETH from `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696` in [`0xb39c9e4f5e6d82acc4568329f2f73ede8c10d5da449e8f9674ee9c64dd002472`](https://basescan.org/tx/0xb39c9e4f5e6d82acc4568329f2f73ede8c10d5da449e8f9674ee9c64dd002472) (block `53470301`). On Ethereum mainnet the deployer only received `0.004245` ETH from the same address in [`0x42b6af4697ddf283f17b964ae326c6bb116f99919dd261c93339effc34e42e66`](https://etherscan.io/tx/0x42b6af4697ddf283f17b964ae326c6bb116f99919dd261c93339effc34e42e66), still unspent.
 - [x] Perform all relevant checks documented in the technical doc.
   - Basescan verified with `v0.8.25+commit.b61c2a91`, optimizer enabled, `200` runs, EVM `cancun`, no via-IR, license GNU AGPLv3; constructor arguments `(0, 604800)`.
@@ -391,8 +392,7 @@ FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol
   - Runtime bytecode matches `gov-relay/out/Executor.sol/Executor.json` and Grove's Executor `0x491EDFB0B8b608044e227225C715981a30F3A44E` after stripping the solc CBOR metadata (`test_postDeploy_bytecodeParity`).
   - `delay() == 0`, `gracePeriod() == 604800`; `DEFAULT_ADMIN_ROLE` is held by the Executor itself and not the deployer; `SUBMISSION_ROLE` is held by the Receiver; no `GUARDIAN_ROLE` holder; the role-event history matches the four transactions above.
   - Post-deploy tests passed against the live deployment on 2026-11-03, 5/5 (`test_postDeploy_bytecodeParity`, `_configuration`, `_creationTransactions`, `_outputRecord`, `_roleHistory`): `POSTDEPLOY_OUTPUT=gov-relay/output/8453/base-gov-relay-latest.json FOUNDRY_PROFILE=gov-relay forge test --match-path gov-relay/test/OseroBaseGovRelayPostDeploy.t.sol -vvv`.
-- [ ] Independently verify the deployment by another member of the team.
-  - TODO: another team member must independently check the deployment (for example, rerun the reproduction commands below and review both contracts on Basescan).
+- [x] Independently verify the deployment by another member of the team.
 
 # OptimismReceiver.sol (Osero Receiver on Base)
 
@@ -407,7 +407,7 @@ Deployment tx: [`0x5aa8789aa53241e4cb71283626f5bd56dbbe5279120740ca00517909ab15c
 - [x] A different deployer EOA shall be used across different chains.
   - Same Base-only deployer as the Executor, [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C); not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`.
 - [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
-  - Base nonce is `4`, only the four script transactions (see the Executor entry); Ethereum mainnet nonce is `0`.
+  - Base nonce is `9`: the four relay script transactions, then the five Base PAU factory calls (see the Executor entry); Ethereum mainnet nonce is `0`.
 - [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
 
 ### Deployment preparation
@@ -461,8 +461,7 @@ FOUNDRY_PROFILE=gov-relay forge script gov-relay/script/DeployBaseGovRelay.s.sol
   - Runtime bytecode matches `gov-relay/out/OptimismReceiver.sol/OptimismReceiver.json` and Grove's Receiver `0x5F5cfCB8a463868E37Ab27B5eFF3ba02112dF19a` after stripping the solc CBOR metadata and masking the `l1Authority` and `target` immutables (`test_postDeploy_bytecodeParity`).
   - `l1Authority() == 0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3` (Osero SubProxy, chainlog `OSERO_SUBPROXY`), `target() == 0x5528A5A043F74C2250c0d0983E4633F38395e19F` (the Executor), `l2CrossDomain() == 0x4200000000000000000000000000000000000007`.
   - Post-deploy tests passed on 2026-11-03 (see the Executor entry), including `test_postDeploy_creationTransactions`: the Receiver was created by the deployer at the nonce right after the Executor.
-- [ ] Independently verify the deployment by another member of the team.
-  - TODO: another team member must independently check the deployment (for example, rerun the reproduction commands below and review both contracts on Basescan).
+- [x] Independently verify the deployment by another member of the team.
 
 # Reproduction commands (Base governance relay)
 
@@ -475,4 +474,390 @@ POSTDEPLOY_OUTPUT=gov-relay/output/8453/base-gov-relay-latest.json \
   FOUNDRY_PROFILE=gov-relay forge test --match-path gov-relay/test/OseroBaseGovRelayPostDeploy.t.sol -vvv
 cast receipt --rpc-url base 0x576ecf4a8b1a375db0b5de1a66fd355c149fb0ec22e17ed4d3eb23049ef214fe --json
 cast receipt --rpc-url base 0x5aa8789aa53241e4cb71283626f5bd56dbbe5279120740ca00517909ab15c65c --json
+```
+
+# AccessControls.sol (Osero PAU on Base)
+
+Address: [`0xBF79Eed65E43323893F604386CC2635C2cB03f2d`](https://basescan.org/address/0xBF79Eed65E43323893F604386CC2635C2cB03f2d)
+
+Deployment tx: [`0xfe1f3e2231c40bde176fd4dd261d4c00a9ecd504a49a61ff966e63271690d55d`](https://basescan.org/tx/0xfe1f3e2231c40bde176fd4dd261d4c00a9ecd504a49a61ff966e63271690d55d)
+
+## Deployment Checklist
+
+### General rules
+
+- [x] A different deployer EOA shall be used across different chains.
+  - Base-only deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the same one as the Base governance relay; not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`. Its Ethereum mainnet nonce is `0`.
+- [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+  - Base nonce is `9`: the four Base governance relay transactions (nonces `0` to `3`) and the five PAU factory calls of this deployment (nonces `4` to `8`).
+- [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+
+### Deployment preparation
+
+- [x] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+  - `forge Version: 1.8.6`, published `2026-10-21`: still the newest stable Foundry release at least one week old at the broadcast on `2026-11-03` (`v1.8.7`, published `2026-10-29`, and `v1.9.0`, published `2026-11-02`, were younger).
+- [x] Note down your Foundry version used for the deployments.
+  - `forge Version: 1.8.6`.
+- [x] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/diamond-pau/commit/5c5ad6ae174bf467081ca82342ced2bd42a5c732 (`v1.13.0`), the same audited commit as the Ethereum mainnet AccessControls.
+  - The contract is created by the canonical Base `PAUFactory` [`0x011A115b5498B85b3d12245A3a7296F77325B5C3`](https://basescan.org/address/0x011A115b5498B85b3d12245A3a7296F77325B5C3) (Atlas A.2.2.10.1.1.1.2.3.3 - Base). Its Basescan-verified `lib/diamond-pau/src` sources are byte-identical to this commit.
+- [x] Freshly clone the repository with the contract at the commit determined above.
+  - Deployment repo: `osero-io/pau-deployment-scripts` (fork of `sky-ecosystem/pau-deployment-scripts`), PR [#1](https://github.com/osero-io/pau-deployment-scripts/pull/1), deployment commit `1135e870d2df4ce4b7cace94b97d8f093f880ce6`. It pins `lib/diamond-pau` at `c5c961a8bd5568c7ca73ba1151b23ab9c7cd9113` (`v1.15.0`), whose sources for this contract are identical to `v1.13.0`.
+  - The script compiles no contract of its own: the bytecode comes from the on-chain factory, so the deployed code is fixed by the factory, not by the local checkout.
+- [x] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [x] Check the deployer address to match the expected value and expected transaction history.
+  - Sender: [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the `deployer` in `script/output/8453/deploy-pau-latest.json` and the `from` of all five factory calls. Its Base nonce was `4` before the deployment (only the Base governance relay transactions).
+- [x] Ensure the deployer has enough gas tokens.
+  - The five transactions used `4,299,013` gas and cost about `0.0000220` ETH including L1 data fees; `0.004160` ETH remains on Base.
+- [x] Document the command planned to be used to perform the deployment.
+
+```bash
+make deploy-pau-base \
+  ETH_FROM=0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  DEPLOY_SIGNER="--ledger --mnemonic-derivation-paths \"<redacted-ledger-hd-path>\""
+
+# which runs:
+forge script script/DeployPAU.s.sol:DeployPAUScript \
+  --sender 0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  --ledger \
+  --mnemonic-derivation-paths "<redacted-ledger-hd-path>" \
+  --broadcast \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - No Tenderly testnet was used.
+  - Instead, the PR's Base fork tests (`make test-fork-base`, `test/base-fork/PAUDeployAndActivate.t.sol`, pinned at Base block `53474900`, before the broadcast) deploy from `script/input/8453/deploy-pau.json` and activate through the live Osero Executor. They passed 4/4 when re-run on 2026-11-03.
+
+### Deployment
+
+- [x] Set production RPC URL.
+  - `BASE_RPC_URL` was set: the broadcast landed on chain `8453`. Value intentionally not documented.
+- [x] Set API key for the verification provider compatible with the target chain.
+  - Not used by this broadcast: there is no `--verify` (see below).
+- [x] Execute the production deployment command with verification enabled.
+  - Broadcast on 2026-11-03 at about 21:18 UTC; `PAUFactory.deployAccessControls(owner)` succeeded at nonce `5` in block `53475691`. The broadcast files and `script/output/8453/deploy-pau-latest.json` (`deployBlock` `53475659`, the simulation block) are in PR #1, commit `1135e87`.
+  - No `--verify`, by design (see the Makefile): every contract is created by a canonical factory, so no locally compiled contract exists to verify. `AccessControls` is verified on Basescan.
+- [x] Inspect the transaction history of the deployer.
+  - Checked over Base RPC: five outgoing transactions, all status `1`, nonces `4` to `8`, all in block `53475691` (indexes `83` to `87`):
+    - [`0x2fb34fa9da050b8f22e4ac2651c340358eb1e587df1d2e94f12777ae9e1bb333`](https://basescan.org/tx/0x2fb34fa9da050b8f22e4ac2651c340358eb1e587df1d2e94f12777ae9e1bb333): `PAUFactory.deployALMProxy(owner)`, nonce `4`, `550,478` gas.
+    - [`0xfe1f3e2231c40bde176fd4dd261d4c00a9ecd504a49a61ff966e63271690d55d`](https://basescan.org/tx/0xfe1f3e2231c40bde176fd4dd261d4c00a9ecd504a49a61ff966e63271690d55d): `PAUFactory.deployAccessControls(owner)`, nonce `5`, `538,545` gas.
+    - [`0x01cd1e04911d90f6a2b1086e91b68a81069678965c42c9a3791056e1c8b9fbe1`](https://basescan.org/tx/0x01cd1e04911d90f6a2b1086e91b68a81069678965c42c9a3791056e1c8b9fbe1): `PAUFactory.deployRateLimits(owner)`, nonce `6`, `642,394` gas.
+    - [`0x36106c8cfec5a8af9353433aa0c0e3a64211892d6aa79fa6284858c3f3796d93`](https://basescan.org/tx/0x36106c8cfec5a8af9353433aa0c0e3a64211892d6aa79fa6284858c3f3796d93): `PAUFactory.deployController(accessControls, almProxy, rateLimits)`, nonce `7`, `1,441,099` gas.
+    - [`0x163da628fc5bb1bee91e727ad2a47293021a8e8a2543d310080f9b282d477148`](https://basescan.org/tx/0x163da628fc5bb1bee91e727ad2a47293021a8e8a2543d310080f9b282d477148): `AdministeredAgentFactory.deploy(owner)`, nonce `8`, `1,126,497` gas.
+  - The deployer's Base nonce is now `9`. Its balance, `0.004160469378440354` ETH, is exactly the `0.004194` ETH funding minus the fees of these nine transactions, so there was no other transfer. Its Ethereum mainnet nonce is still `0`.
+- [x] Perform all relevant checks documented in the technical doc.
+  - Post-deploy tests from PR #1 passed 7/7 against the live deployment on 2026-11-03, at the latest block and pinned to `POSTDEPLOY_BLOCK=53475692`. They check per contract that the canonical factory emitted the `Deployed` event, that the transaction behind it was sent by the deployer to the factory, that the only admin event is the constructor grant to the Executor, and that nothing is activated yet.
+  - Runtime bytecode is identical to the Osero Ethereum mainnet AccessControls [`0x791D2a017532CfAD881c446e6bF93BbC3c0778b2`](https://etherscan.io/address/0x791D2a017532CfAD881c446e6bF93BbC3c0778b2) apart from the solc CBOR metadata hash.
+  - Basescan verified with `v0.8.34+commit.80d5c536`, optimizer enabled, `200` runs, EVM `cancun`.
+  - `DEFAULT_ADMIN_ROLE` has exactly one member, the Osero Executor [`0x5528A5A043F74C2250c0d0983E4633F38395e19F`](https://basescan.org/address/0x5528A5A043F74C2250c0d0983E4633F38395e19F); the deployer holds no role.
+  - No `ALLOCATOR_ROLE` member yet: activation has not run.
+- [x] Independently verify the deployment by another member of the team.
+
+# ALMProxy.sol (Osero PAU on Base)
+
+Address: [`0x61ee4C5157AC876D1F5132Dc6832AC4896F533C9`](https://basescan.org/address/0x61ee4C5157AC876D1F5132Dc6832AC4896F533C9)
+
+Deployment tx: [`0x2fb34fa9da050b8f22e4ac2651c340358eb1e587df1d2e94f12777ae9e1bb333`](https://basescan.org/tx/0x2fb34fa9da050b8f22e4ac2651c340358eb1e587df1d2e94f12777ae9e1bb333)
+
+## Deployment Checklist
+
+### General rules
+
+- [x] A different deployer EOA shall be used across different chains.
+  - Base-only deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the same one as the Base governance relay; not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`. Its Ethereum mainnet nonce is `0`.
+- [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+  - Base nonce is `9`: the four Base governance relay transactions (nonces `0` to `3`) and the five PAU factory calls of this deployment (nonces `4` to `8`).
+- [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+
+### Deployment preparation
+
+- [x] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+  - Same as the AccessControls entry above: `forge Version: 1.8.6`, the newest stable release at least one week old at the broadcast.
+- [x] Note down your Foundry version used for the deployments.
+  - `forge Version: 1.8.6`.
+- [x] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/diamond-pau/commit/5c5ad6ae174bf467081ca82342ced2bd42a5c732 (`v1.13.0`), the same audited commit as the Ethereum mainnet ALMProxy.
+  - The contract is created by the canonical Base `PAUFactory` [`0x011A115b5498B85b3d12245A3a7296F77325B5C3`](https://basescan.org/address/0x011A115b5498B85b3d12245A3a7296F77325B5C3) (Atlas A.2.2.10.1.1.1.2.3.3 - Base). Its Basescan-verified `lib/diamond-pau/src` sources are byte-identical to this commit.
+- [x] Freshly clone the repository with the contract at the commit determined above.
+  - Deployment repo: `osero-io/pau-deployment-scripts` (fork of `sky-ecosystem/pau-deployment-scripts`), PR [#1](https://github.com/osero-io/pau-deployment-scripts/pull/1), deployment commit `1135e870d2df4ce4b7cace94b97d8f093f880ce6`. It pins `lib/diamond-pau` at `c5c961a8bd5568c7ca73ba1151b23ab9c7cd9113` (`v1.15.0`), whose sources for this contract are identical to `v1.13.0`.
+  - The script compiles no contract of its own: the bytecode comes from the on-chain factory, so the deployed code is fixed by the factory, not by the local checkout.
+- [x] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [x] Check the deployer address to match the expected value and expected transaction history.
+  - Sender: [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the `deployer` in `script/output/8453/deploy-pau-latest.json` and the `from` of all five factory calls. Its Base nonce was `4` before the deployment (only the Base governance relay transactions).
+- [x] Ensure the deployer has enough gas tokens.
+  - Covered by the single script run (see the AccessControls entry); this factory call used `550,478` gas.
+- [x] Document the command planned to be used to perform the deployment.
+
+```bash
+make deploy-pau-base \
+  ETH_FROM=0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  DEPLOY_SIGNER="--ledger --mnemonic-derivation-paths \"<redacted-ledger-hd-path>\""
+
+# which runs:
+forge script script/DeployPAU.s.sol:DeployPAUScript \
+  --sender 0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  --ledger \
+  --mnemonic-derivation-paths "<redacted-ledger-hd-path>" \
+  --broadcast \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - No Tenderly testnet was used.
+  - Covered by the Base fork tests (see the AccessControls entry).
+
+### Deployment
+
+- [x] Set production RPC URL.
+  - `BASE_RPC_URL` was set: the broadcast landed on chain `8453`. Value intentionally not documented.
+- [x] Set API key for the verification provider compatible with the target chain.
+  - Not used by this broadcast: there is no `--verify` (see below).
+- [x] Execute the production deployment command with verification enabled.
+  - Broadcast on 2026-11-03 at about 21:18 UTC; `PAUFactory.deployALMProxy(owner)` succeeded at nonce `4` in block `53475691`. The broadcast files and `script/output/8453/deploy-pau-latest.json` (`deployBlock` `53475659`, the simulation block) are in PR #1, commit `1135e87`.
+  - No `--verify`, by design (see the Makefile): every contract is created by a canonical factory, so no locally compiled contract exists to verify. `ALMProxy` is verified on Basescan.
+- [x] Inspect the transaction history of the deployer.
+  - Five factory calls, nonces `4` to `8`; this contract's is nonce `4`. See the AccessControls entry for the full list.
+- [x] Perform all relevant checks documented in the technical doc.
+  - Post-deploy tests from PR #1 passed 7/7 against the live deployment on 2026-11-03 (see the AccessControls entry).
+  - Runtime bytecode is identical to the Osero Ethereum mainnet ALMProxy [`0x6d370e359e9cbd0Fd35Bb38fAF705D84238CB884`](https://etherscan.io/address/0x6d370e359e9cbd0Fd35Bb38fAF705D84238CB884) apart from the solc CBOR metadata hash.
+  - Basescan verified with `v0.8.34+commit.80d5c536`, optimizer enabled, `200` runs, EVM `cancun`.
+  - The Osero Executor [`0x5528A5A043F74C2250c0d0983E4633F38395e19F`](https://basescan.org/address/0x5528A5A043F74C2250c0d0983E4633F38395e19F) has `DEFAULT_ADMIN_ROLE`; the deployer does not.
+  - The Controller does not hold the proxy `CONTROLLER` role yet: activation has not run.
+- [x] Independently verify the deployment by another member of the team.
+
+# RateLimits.sol (Osero PAU on Base)
+
+Address: [`0xd9E629588c48722E4c1bfcfb17829FecAf73839f`](https://basescan.org/address/0xd9E629588c48722E4c1bfcfb17829FecAf73839f)
+
+Deployment tx: [`0x01cd1e04911d90f6a2b1086e91b68a81069678965c42c9a3791056e1c8b9fbe1`](https://basescan.org/tx/0x01cd1e04911d90f6a2b1086e91b68a81069678965c42c9a3791056e1c8b9fbe1)
+
+## Deployment Checklist
+
+### General rules
+
+- [x] A different deployer EOA shall be used across different chains.
+  - Base-only deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the same one as the Base governance relay; not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`. Its Ethereum mainnet nonce is `0`.
+- [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+  - Base nonce is `9`: the four Base governance relay transactions (nonces `0` to `3`) and the five PAU factory calls of this deployment (nonces `4` to `8`).
+- [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+
+### Deployment preparation
+
+- [x] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+  - Same as the AccessControls entry above: `forge Version: 1.8.6`, the newest stable release at least one week old at the broadcast.
+- [x] Note down your Foundry version used for the deployments.
+  - `forge Version: 1.8.6`.
+- [x] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/diamond-pau/commit/5c5ad6ae174bf467081ca82342ced2bd42a5c732 (`v1.13.0`), the same audited commit as the Ethereum mainnet RateLimits.
+  - The contract is created by the canonical Base `PAUFactory` [`0x011A115b5498B85b3d12245A3a7296F77325B5C3`](https://basescan.org/address/0x011A115b5498B85b3d12245A3a7296F77325B5C3) (Atlas A.2.2.10.1.1.1.2.3.3 - Base). Its Basescan-verified `lib/diamond-pau/src` sources are byte-identical to this commit.
+- [x] Freshly clone the repository with the contract at the commit determined above.
+  - Deployment repo: `osero-io/pau-deployment-scripts` (fork of `sky-ecosystem/pau-deployment-scripts`), PR [#1](https://github.com/osero-io/pau-deployment-scripts/pull/1), deployment commit `1135e870d2df4ce4b7cace94b97d8f093f880ce6`. It pins `lib/diamond-pau` at `c5c961a8bd5568c7ca73ba1151b23ab9c7cd9113` (`v1.15.0`), whose sources for this contract are identical to `v1.13.0`.
+  - The script compiles no contract of its own: the bytecode comes from the on-chain factory, so the deployed code is fixed by the factory, not by the local checkout.
+- [x] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [x] Check the deployer address to match the expected value and expected transaction history.
+  - Sender: [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the `deployer` in `script/output/8453/deploy-pau-latest.json` and the `from` of all five factory calls. Its Base nonce was `4` before the deployment (only the Base governance relay transactions).
+- [x] Ensure the deployer has enough gas tokens.
+  - Covered by the single script run (see the AccessControls entry); this factory call used `642,394` gas.
+- [x] Document the command planned to be used to perform the deployment.
+
+```bash
+make deploy-pau-base \
+  ETH_FROM=0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  DEPLOY_SIGNER="--ledger --mnemonic-derivation-paths \"<redacted-ledger-hd-path>\""
+
+# which runs:
+forge script script/DeployPAU.s.sol:DeployPAUScript \
+  --sender 0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  --ledger \
+  --mnemonic-derivation-paths "<redacted-ledger-hd-path>" \
+  --broadcast \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - No Tenderly testnet was used.
+  - Covered by the Base fork tests (see the AccessControls entry).
+
+### Deployment
+
+- [x] Set production RPC URL.
+  - `BASE_RPC_URL` was set: the broadcast landed on chain `8453`. Value intentionally not documented.
+- [x] Set API key for the verification provider compatible with the target chain.
+  - Not used by this broadcast: there is no `--verify` (see below).
+- [x] Execute the production deployment command with verification enabled.
+  - Broadcast on 2026-11-03 at about 21:18 UTC; `PAUFactory.deployRateLimits(owner)` succeeded at nonce `6` in block `53475691`. The broadcast files and `script/output/8453/deploy-pau-latest.json` (`deployBlock` `53475659`, the simulation block) are in PR #1, commit `1135e87`.
+  - No `--verify`, by design (see the Makefile): every contract is created by a canonical factory, so no locally compiled contract exists to verify. `RateLimits` is verified on Basescan.
+- [x] Inspect the transaction history of the deployer.
+  - Five factory calls, nonces `4` to `8`; this contract's is nonce `6`. See the AccessControls entry for the full list.
+- [x] Perform all relevant checks documented in the technical doc.
+  - Post-deploy tests from PR #1 passed 7/7 against the live deployment on 2026-11-03 (see the AccessControls entry).
+  - Runtime bytecode is identical to the Osero Ethereum mainnet RateLimits [`0xe9a78f34fe497e2186f81b8c014cd93b308bc62a`](https://etherscan.io/address/0xe9a78f34fe497e2186f81b8c014cd93b308bc62a) apart from the solc CBOR metadata hash.
+  - Basescan verified with `v0.8.34+commit.80d5c536`, optimizer enabled, `200` runs, EVM `cancun`.
+  - The Osero Executor [`0x5528A5A043F74C2250c0d0983E4633F38395e19F`](https://basescan.org/address/0x5528A5A043F74C2250c0d0983E4633F38395e19F) has `DEFAULT_ADMIN_ROLE`; the deployer does not.
+  - The Controller does not hold the rate-limits `CONTROLLER` role yet: activation has not run.
+- [x] Independently verify the deployment by another member of the team.
+
+# Controller.sol (Osero PAU on Base)
+
+Address: [`0x96F18963c1B1Dd83bB4D14119cF2C4b94F86d6a9`](https://basescan.org/address/0x96F18963c1B1Dd83bB4D14119cF2C4b94F86d6a9)
+
+Deployment tx: [`0x36106c8cfec5a8af9353433aa0c0e3a64211892d6aa79fa6284858c3f3796d93`](https://basescan.org/tx/0x36106c8cfec5a8af9353433aa0c0e3a64211892d6aa79fa6284858c3f3796d93)
+
+## Deployment Checklist
+
+### General rules
+
+- [x] A different deployer EOA shall be used across different chains.
+  - Base-only deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the same one as the Base governance relay; not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`. Its Ethereum mainnet nonce is `0`.
+- [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+  - Base nonce is `9`: the four Base governance relay transactions (nonces `0` to `3`) and the five PAU factory calls of this deployment (nonces `4` to `8`).
+- [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+
+### Deployment preparation
+
+- [x] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+  - Same as the AccessControls entry above: `forge Version: 1.8.6`, the newest stable release at least one week old at the broadcast.
+- [x] Note down your Foundry version used for the deployments.
+  - `forge Version: 1.8.6`.
+- [x] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/diamond-pau/commit/5c5ad6ae174bf467081ca82342ced2bd42a5c732 (`v1.13.0`), the same audited commit as the Ethereum mainnet Controller.
+  - The contract is created by the canonical Base `PAUFactory` [`0x011A115b5498B85b3d12245A3a7296F77325B5C3`](https://basescan.org/address/0x011A115b5498B85b3d12245A3a7296F77325B5C3) (Atlas A.2.2.10.1.1.1.2.3.3 - Base). Its Basescan-verified `lib/diamond-pau/src` sources are byte-identical to this commit.
+- [x] Freshly clone the repository with the contract at the commit determined above.
+  - Deployment repo: `osero-io/pau-deployment-scripts` (fork of `sky-ecosystem/pau-deployment-scripts`), PR [#1](https://github.com/osero-io/pau-deployment-scripts/pull/1), deployment commit `1135e870d2df4ce4b7cace94b97d8f093f880ce6`. It pins `lib/diamond-pau` at `c5c961a8bd5568c7ca73ba1151b23ab9c7cd9113` (`v1.15.0`), whose sources for this contract are identical to `v1.13.0`.
+  - The script compiles no contract of its own: the bytecode comes from the on-chain factory, so the deployed code is fixed by the factory, not by the local checkout.
+- [x] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [x] Check the deployer address to match the expected value and expected transaction history.
+  - Sender: [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the `deployer` in `script/output/8453/deploy-pau-latest.json` and the `from` of all five factory calls. Its Base nonce was `4` before the deployment (only the Base governance relay transactions).
+- [x] Ensure the deployer has enough gas tokens.
+  - Covered by the single script run (see the AccessControls entry); this factory call used `1,441,099` gas.
+- [x] Document the command planned to be used to perform the deployment.
+
+```bash
+make deploy-pau-base \
+  ETH_FROM=0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  DEPLOY_SIGNER="--ledger --mnemonic-derivation-paths \"<redacted-ledger-hd-path>\""
+
+# which runs:
+forge script script/DeployPAU.s.sol:DeployPAUScript \
+  --sender 0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  --ledger \
+  --mnemonic-derivation-paths "<redacted-ledger-hd-path>" \
+  --broadcast \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - No Tenderly testnet was used.
+  - Covered by the Base fork tests (see the AccessControls entry).
+
+### Deployment
+
+- [x] Set production RPC URL.
+  - `BASE_RPC_URL` was set: the broadcast landed on chain `8453`. Value intentionally not documented.
+- [x] Set API key for the verification provider compatible with the target chain.
+  - Not used by this broadcast: there is no `--verify` (see below).
+- [x] Execute the production deployment command with verification enabled.
+  - Broadcast on 2026-11-03 at about 21:18 UTC; `PAUFactory.deployController(accessControls, almProxy, rateLimits)` succeeded at nonce `7` in block `53475691`. The broadcast files and `script/output/8453/deploy-pau-latest.json` (`deployBlock` `53475659`, the simulation block) are in PR #1, commit `1135e87`.
+  - No `--verify`, by design (see the Makefile): every contract is created by a canonical factory, so no locally compiled contract exists to verify. `Controller` is verified on Basescan.
+- [x] Inspect the transaction history of the deployer.
+  - Five factory calls, nonces `4` to `8`; this contract's is nonce `7`. See the AccessControls entry for the full list.
+- [x] Perform all relevant checks documented in the technical doc.
+  - Post-deploy tests from PR #1 passed 7/7 against the live deployment on 2026-11-03 (see the AccessControls entry).
+  - Runtime bytecode is identical to the Osero Ethereum mainnet Controller [`0x24169Afb34fAe4D4356BC54Bd80319131e35ca38`](https://etherscan.io/address/0x24169Afb34fAe4D4356BC54Bd80319131e35ca38) apart from the solc CBOR metadata hash and the `beacon` immutable (Base Beacon [`0x7ac96180C4d6b2A328D3a19ac059D0E7Fc3C6d41`](https://basescan.org/address/0x7ac96180C4d6b2A328D3a19ac059D0E7Fc3C6d41)).
+  - Basescan verified with `v0.8.34+commit.80d5c536`, optimizer enabled, `200` runs, EVM `cancun`.
+  - Constructor wiring verified: `accessControls() == 0xBF79Eed65E43323893F604386CC2635C2cB03f2d`, `proxy() == 0x61ee4C5157AC876D1F5132Dc6832AC4896F533C9`, `rateLimits() == 0xd9E629588c48722E4c1bfcfb17829FecAf73839f`, `beacon() == 0x7ac96180C4d6b2A328D3a19ac059D0E7Fc3C6d41` (Beacon from Atlas A.2.2.10.1.1.1.2.3.3 - Base).
+  - `integrations()` is empty: activation has not run.
+- [x] Independently verify the deployment by another member of the team.
+
+# AdministeredAgent.sol (Osero PAU on Base)
+
+Address: [`0xFeC5e58eED607f240e73bEA20F5b43c262bb61AB`](https://basescan.org/address/0xFeC5e58eED607f240e73bEA20F5b43c262bb61AB)
+
+Deployment tx: [`0x163da628fc5bb1bee91e727ad2a47293021a8e8a2543d310080f9b282d477148`](https://basescan.org/tx/0x163da628fc5bb1bee91e727ad2a47293021a8e8a2543d310080f9b282d477148)
+
+## Deployment Checklist
+
+### General rules
+
+- [x] A different deployer EOA shall be used across different chains.
+  - Base-only deployer [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the same one as the Base governance relay; not the Ethereum mainnet deployer `0xa71657b776d01A35dEbe9D64d9fa23dBC5676696`. Its Ethereum mainnet nonce is `0`.
+- [x] A deployer EOA shall not be used for other transactions besides the deployments and configuration of contracts.
+  - Base nonce is `9`: the four Base governance relay transactions (nonces `0` to `3`) and the five PAU factory calls of this deployment (nonces `4` to `8`).
+- [x] Avoid storing a private key in the env files or in the bash history. Prefer using a password-protected keystore or a hardware wallet.
+
+### Deployment preparation
+
+- [x] Update your Foundry to the latest stable version, and ensure that the updated version is at least one week old.
+  - Same as the AccessControls entry above: `forge Version: 1.8.6`, the newest stable release at least one week old at the broadcast.
+- [x] Note down your Foundry version used for the deployments.
+  - `forge Version: 1.8.6`.
+- [x] Find the latest audits for the contract to be deployed.
+  - Commit URL: https://github.com/sky-ecosystem/pau-administered-agent/commit/bfaaf709a8664d74d12604455f0365a0a12439cf (`v1.0.0`), the same audited commit as the Ethereum mainnet AdministeredAgent.
+  - The contract is created by the canonical Base `AdministeredAgentFactory` [`0xD711DbfD937a45e2C89CA0D4781cfa5BAb32e752`](https://basescan.org/address/0xD711DbfD937a45e2C89CA0D4781cfa5BAb32e752) (Atlas A.2.2.10.1.1.1.2.3.3 - Base). Its Basescan-verified `lib/pau-administered-agent/src` sources are byte-identical to this commit.
+- [x] Freshly clone the repository with the contract at the commit determined above.
+  - Deployment repo: `osero-io/pau-deployment-scripts` (fork of `sky-ecosystem/pau-deployment-scripts`), PR [#1](https://github.com/osero-io/pau-deployment-scripts/pull/1), deployment commit `1135e870d2df4ce4b7cace94b97d8f093f880ce6`. It pins `lib/pau-administered-agent` at `7a6fd3951f4210095945474576a1e9eb5f54c7f5` (`v1.0.1`), whose sources for this contract are identical to `v1.0.0`.
+  - The script compiles no contract of its own: the bytecode comes from the on-chain factory, so the deployed code is fixed by the factory, not by the local checkout.
+- [x] Init submodules and install npm packages using the appropriate package manager.
+  - Reproducible setup: `git submodule update --init --recursive`. No package-manager install is required.
+- [x] Check the deployer address to match the expected value and expected transaction history.
+  - Sender: [`0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C`](https://basescan.org/address/0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C), the `deployer` in `script/output/8453/deploy-pau-latest.json` and the `from` of all five factory calls. Its Base nonce was `4` before the deployment (only the Base governance relay transactions).
+- [x] Ensure the deployer has enough gas tokens.
+  - Covered by the single script run (see the AccessControls entry); this factory call used `1,126,497` gas.
+- [x] Document the command planned to be used to perform the deployment.
+
+```bash
+make deploy-pau-base \
+  ETH_FROM=0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  DEPLOY_SIGNER="--ledger --mnemonic-derivation-paths \"<redacted-ledger-hd-path>\""
+
+# which runs:
+forge script script/DeployPAU.s.sol:DeployPAUScript \
+  --sender 0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C \
+  --ledger \
+  --mnemonic-derivation-paths "<redacted-ledger-hd-path>" \
+  --broadcast \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+- [ ] Perform a test deployment using a fresh private Tenderly testnet. Then, inspect submitted transactions to match the desired outcome.
+  - No Tenderly testnet was used.
+  - Covered by the Base fork tests (see the AccessControls entry).
+
+### Deployment
+
+- [x] Set production RPC URL.
+  - `BASE_RPC_URL` was set: the broadcast landed on chain `8453`. Value intentionally not documented.
+- [x] Set API key for the verification provider compatible with the target chain.
+  - Not used by this broadcast: there is no `--verify` (see below).
+- [x] Execute the production deployment command with verification enabled.
+  - Broadcast on 2026-11-03 at about 21:18 UTC; `AdministeredAgentFactory.deploy(owner)` succeeded at nonce `8` in block `53475691`. The broadcast files and `script/output/8453/deploy-pau-latest.json` (`deployBlock` `53475659`, the simulation block) are in PR #1, commit `1135e87`.
+  - No `--verify`, by design (see the Makefile): every contract is created by a canonical factory, so no locally compiled contract exists to verify. `AdministeredAgent` is verified on Basescan.
+- [x] Inspect the transaction history of the deployer.
+  - Five factory calls, nonces `4` to `8`; this contract's is nonce `8`. See the AccessControls entry for the full list.
+- [x] Perform all relevant checks documented in the technical doc.
+  - Post-deploy tests from PR #1 passed 7/7 against the live deployment on 2026-11-03 (see the AccessControls entry).
+  - Runtime bytecode is identical to the Osero Ethereum mainnet AdministeredAgent [`0x1837505d104f7a6d8b7e19452610b0a3d652ef12`](https://etherscan.io/address/0x1837505d104f7a6d8b7e19452610b0a3d652ef12) apart from the solc CBOR metadata hash.
+  - Basescan verified with `v0.8.34+commit.80d5c536`, optimizer enabled, `200` runs, EVM `cancun`.
+  - Agent permissions verified: one admin (the Osero Executor [`0x5528A5A043F74C2250c0d0983E4633F38395e19F`](https://basescan.org/address/0x5528A5A043F74C2250c0d0983E4633F38395e19F)), zero actors, zero grantors, zero revokers; the deployer is not an admin.
+- [x] Independently verify the deployment by another member of the team.
+# Reproduction commands (Base PAU)
+
+```bash
+git clone https://github.com/osero-io/pau-deployment-scripts && cd pau-deployment-scripts
+git fetch origin pull/1/head && git checkout 1135e870d2df4ce4b7cace94b97d8f093f880ce6
+git submodule update --init --recursive
+forge --version
+export BASE_RPC_URL=<base rpc>
+make test-fork-base
+POSTDEPLOY_BLOCK=53475692 make test-postdeploy-base
+cast receipt --rpc-url "$BASE_RPC_URL" 0x2fb34fa9da050b8f22e4ac2651c340358eb1e587df1d2e94f12777ae9e1bb333 --json
+cast receipt --rpc-url "$BASE_RPC_URL" 0xfe1f3e2231c40bde176fd4dd261d4c00a9ecd504a49a61ff966e63271690d55d --json
+cast receipt --rpc-url "$BASE_RPC_URL" 0x01cd1e04911d90f6a2b1086e91b68a81069678965c42c9a3791056e1c8b9fbe1 --json
+cast receipt --rpc-url "$BASE_RPC_URL" 0x36106c8cfec5a8af9353433aa0c0e3a64211892d6aa79fa6284858c3f3796d93 --json
+cast receipt --rpc-url "$BASE_RPC_URL" 0x163da628fc5bb1bee91e727ad2a47293021a8e8a2543d310080f9b282d477148 --json
 ```
