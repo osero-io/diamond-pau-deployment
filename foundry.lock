@@ -1,14 +1,14 @@
 {
-  "lib/forge-std": {
-    "tag": {
-      "name": "v1.16.1",
-      "rev": "620536fa5277db4e3fd46772d5cbc1ea0696fb43"
-    }
-  },
   "lib/diamond-pau": {
     "tag": {
       "name": "v1.13.0",
       "rev": "5c5ad6ae174bf467081ca82342ced2bd42a5c732"
+    }
+  },
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.16.1",
+      "rev": "620536fa5277db4e3fd46772d5cbc1ea0696fb43"
     }
   },
   "lib/osero-address-registry": {
@@ -28,5 +28,11 @@
   },
   "lib/sky-pau-registry": {
     "rev": "7b4493a7800b355ef5c9cc43e569c5e8d6fd97f8"
+  },
+  "lib/spark-gov-relay": {
+    "tag": {
+      "name": "v1.0.1",
+      "rev": "5c166763464802a9f985fa50560c9e9fb0cf6c2b"
+    }
   }
 }

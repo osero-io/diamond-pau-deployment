@@ -9,11 +9,44 @@ evm_version = 'cancun'
 
 remappings = ["@osero/address-registry/=lib/osero-address-registry/src/"]
 
+# Osero governance relay on Base (Executor + OptimismReceiver). Select it with
+# `FOUNDRY_PROFILE=gov-relay`. It compiles only `gov-relay/` and its imports, with the compiler
+# settings of the audited spark-gov-relay v1.0.1 build (and of Grove's Base relay):
+# solc 0.8.25, optimizer 200 runs, cancun, no via-IR. Do not change these settings.
+[profile.gov-relay]
+src = "gov-relay/src"
+script = "gov-relay/script"
+test = "gov-relay/test"
+out = "gov-relay/out"
+cache_path = "gov-relay/cache"
+libs = ["lib"]
+solc_version = '0.8.25'
+optimizer = true
+optimizer_runs = 200
+evm_version = 'cancun'
+via_ir = false
+# Explicit remappings only. Auto-detection would add context remappings that resolve the nested
+# xchain-helpers copies of OpenZeppelin and forge-std instead of the ones pinned below.
+auto_detect_remappings = false
+remappings = [
+  "@osero/address-registry/=lib/osero-address-registry/src/",
+  "forge-std/=lib/forge-std/src/",
+  "openzeppelin-contracts/=lib/spark-gov-relay/lib/openzeppelin-contracts/",
+  "spark-gov-relay/=lib/spark-gov-relay/src/",
+  "xchain-helpers/=lib/spark-gov-relay/lib/xchain-helpers/src/",
+]
+fs_permissions = [
+  { access = "read", path = "./gov-relay/out" },
+  { access = "read-write", path = "./gov-relay/output" },
+]
+
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
+base = { key = "${ETHERSCAN_API_KEY}", chain = 8453 }
 
 [rpc_endpoints]
 mainnet = "${MAINNET_RPC_URL}"
+base = "${BASE_RPC_URL}"
 
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

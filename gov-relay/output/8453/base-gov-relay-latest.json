@@ -1,0 +1,9 @@
+{
+  "delay": 0,
+  "deployBlock": 53470334,
+  "deployer": "0x3841ec3CB6aEE239ecD43d49755F6f25aDcA9D5C",
+  "executor": "0x5528A5A043F74C2250c0d0983E4633F38395e19F",
+  "gracePeriod": 604800,
+  "l1Authority": "0x24fdcd3bFA5C2553e05B2f9AD0365EBC296278D3",
+  "receiver": "0x63B4A33770F58205F3D646C5A635fF417a3819C3"
+}
